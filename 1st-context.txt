@@ -1,0 +1,142 @@
+```markdown
+# BidTop.vn — Project Context (Clone outbid.lol cho thị trường VN)
+*Tổng hợp từ phiên brainstorm ngày 23/08/2026*
+
+## 1. Ý tưởng gốc
+
+Clone mô hình **outbid.lol**: một bảng xếp hạng công khai nơi **thứ hạng = số tiền đã trả, không gì khác** ("Rank is the bid — nothing else"). Không quảng cáo, không API, không chia doanh thu. Trả tiền thật để đứng trên người khác; trả ít hơn vẫn được xếp vào đúng vị trí xứng đáng.
+
+**Số liệu tham khảo từ bản gốc**: launch 19/08/2026 23:08, doanh thu $176,151 trong 77 giờ đầu, bid cao nhất $15,000 (see.io), founder Jonathan Wilke (cũng là founder supastarter.dev, site dựng trên chính boilerplate của anh ta).
+
+## 2. Cơ chế xếp hạng (core mechanic — bắt buộc phải giữ đúng khi clone)
+
+- Giá khởi điểm $5 (bản gốc), tăng tối thiểu $1/lần, trần $999,999.
+- Muốn lấy #1: phải trả ≥ `giá_hiện_tại_của_#1 + $5`.
+- Trả ít hơn giá #1 vẫn được — hệ thống tự chèn vào đúng hạng mà số tiền đó xứng đáng (insert vào mảng đã sort `ORDER BY amount DESC, created_at ASC`).
+- Hòa giá → bid cũ hơn giữ hạng cao hơn.
+- Nâng bid đã có (nhập lại đúng URL/@handle): chỉ trả **phần chênh lệch** (≥ +$1 so với bid hiện tại); **người khác không thể cướp hạng bằng cách trả đúng phần chênh đó** — nghĩa là listing được định danh theo domain/handle làm khóa duy nhất, không phải theo giao dịch.
+- Link App Store/Play Store/GitHub: dedupe theo **domain + path** (không chỉ domain) để phân biệt các app khác nhau trên cùng nền tảng.
+- Query string tracking bị bỏ qua khi so khớp danh tính listing.
+- Mỗi category có bảng xếp hạng riêng (không chỉ 1 bảng global).
+- **Rank chỉ được ghi nhận sau khi thanh toán hoàn tất** — không tính rank ngay lúc submit form (tránh giữ chỗ khi chưa trả tiền).
+
+## 3. Luật nội dung
+
+- Chỉ nhận: website sản phẩm, hoặc @handle mạng xã hội.
+- Cấm: link chat/mời nhóm (Telegram, Discord, WhatsApp, Zalo group...), nội dung sex/NSFW, link rút gọn (phải resolve ra URL đích trước khi lưu).
+- Query params bị strip khỏi link hiển thị.
+- Category gán tự động bằng AI lúc submit, sửa tay qua liên hệ founder nếu sai.
+
+## 4. Cấu trúc trang & UX (bản gốc)
+
+- `/` — leaderboard chính, 50 listing/trang, có "Latest activity" real-time-ish, đếm "N online", tổng lượt truy cập.
+- `/rules`, `/about`, `/categories`, `/category/[slug]`.
+- **Không có trang chi tiết riêng cho từng listing** — click vào domain đi thẳng ra ngoài (`?utm_source=outbid`).
+- Footer khoe doanh thu real-time từ lúc launch — đòn tăng trưởng viral chính (FOMO + dễ share lên Twitter/HN).
+
+## 5. Tech stack quan sát được (bản gốc, tham khảo khi build)
+
+- **Next.js** + Turbopack (SSR/ISR cho leaderboard).
+- `/api/favicon?domain=...` — route proxy lấy favicon từng site (cache được, tránh hotlink trực tiếp).
+- `/api/revenue` — endpoint riêng cho số liệu doanh thu ở footer.
+- Analytics: datafa.st (đã đổi từ nhà cung cấp khác vì vỡ traffic).
+- Thanh toán: gần như chắc chắn **Stripe Checkout** one-time payment → webhook `checkout.session.completed` mới ghi nhận hạng (không optimistic update lúc submit).
+
+### 3 rủi ro kỹ thuật bắt buộc phải giải quyết khi clone
+1. **Race condition** khi 2 người cùng bid cho cùng 1 hạng cùng lúc → cần transaction/lock ở DB level khi ghi nhận thanh toán thành công, tuyệt đối không tính rank lúc submit form.
+2. **Webhook thanh toán đáng tin cậy** — verify chữ ký, idempotency để tránh double-charge/double-rank khi webhook bắn nhiều lần.
+3. **Chuẩn hoá định danh listing** — domain gốc + path riêng cho store links, loại bỏ query string, cần một hàm normalize URL nhất quán.
+
+## 6. Thương hiệu & Domain
+
+**Đã chốt: bidtop.vn**
+
+Domain đã cân nhắc và loại:
+| Domain | Lý do loại |
+|---|---|
+| listop.vn | Chứa từ ẩn "STOP" khi viết liền (li‑**STOP**) — connotation tiêu cực |
+| dautop.vn | Domain không dấu → "dau" mơ hồ giữa đau/đấu/đâu/dâu/dầu, dễ đọc nhầm thành "đau" (tiêu cực) |
+| toppicks.vn | "Top picks" ngụ ý được ban biên tập chọn lọc (curated) — mâu thuẫn trực tiếp với chính cơ chế "rank được mua, không phải được chọn"; quá chung chung, bị dùng tràn lan toàn cầu |
+| outbid.vn | Cân nhắc giữ nguyên tên gốc nhưng ít đặc trưng riêng cho VN |
+
+**Lý do chọn bidtop.vn**: "bid" là từ mượn tiếng Anh nên không mất nghĩa khi domain không có dấu (khác các phương án tiếng Việt bị mất dấu); "top" + "bid" nói đúng bản chất "trả tiền để giành hạng" ngay từ tên; target audience (founder/marketer) đã quen thuật ngữ "bid".
+
+**Cặp từ chơi chữ tiếng Việt tham khảo** (không phải tên miền, để dùng cho tagline/content marketing): "đầu" (đứng đầu/top) vs "đấu" (đấu giá/cạnh tranh) — chỉ khác 1 dấu thanh, gần âm rất "ăn" để chơi chữ trong copywriting.
+
+### Quyết định quan trọng: KHÔNG dùng totnhat.com.vn (kể cả subdomain)
+
+User đã có sẵn domain **totnhat.com.vn** (dự án review sản phẩm/dịch vụ, xem thêm memory `totnhat-competitor-research`). Đã quyết định **không** dùng domain hay subdomain của totnhat.com.vn cho sản phẩm bidtop vì xung đột brand promise:
+- "Tốt nhất" ngụ ý xếp hạng theo chất lượng khách quan/organic.
+- BidTop công khai ngược lại: rank được **mua**, không phải kiếm được.
+- Kể cả đặt ở subdomain (`bid.totnhat.com.vn`), root domain "totnhat" vẫn hiện trong URL → rủi ro lây uy tín 2 chiều (mất trust vào cả review organic hiện có lẫn sản phẩm mới), ảnh hưởng SEO/E-E-A-T dài hạn của totnhat.com.vn.
+
+**Giải pháp thay thế**: tách domain riêng (bidtop.vn), chỉ cross-promote qua footer kiểu "một sản phẩm khác của [founder/team]" — giống cách outbid.lol tự ghi "Brought to you by supastarter.dev" mà không mượn nghĩa thương hiệu supastarter.
+
+## 7. Chiến lược mở rộng — 2 nhóm sản phẩm
+
+### Nhóm 1 — Dịch vụ (giữ trên **bidtop.vn**)
+Startup/SaaS, dịch vụ pháp lý, bất động sản. Gần như đúng y hệt mô hình gốc outbid.lol.
+
+- **Lợi thế có sẵn**: user có nhiều SaaS riêng (Digilever, ContentSuper, Scoria, MarineConnect, Wikimind...) → dùng làm bidder mồi ban đầu để board không trống ngày đầu (giải bài toán "cold start" của marketplace 2 chiều).
+- **Bất động sản**: để làm 1 category trong bidtop.vn trước, đủ traction mới tách site riêng — đúng lộ trình bản gốc đã đi (outbid.lol → tách outbid.immo khi đủ nhu cầu).
+- **Dịch vụ pháp lý**: ⚠️ cần kiểm tra Luật Luật sư và Luật Quảng cáo VN trước khi mở category — quảng cáo dịch vụ luật sư/tổ chức hành nghề luật bị ràng buộc quy định riêng về hình thức quảng cáo.
+
+### Nhóm 2 — Sản phẩm Shopee/Lazada (gắn vào **totnhat.com.vn**, KHÔNG để trên bidtop.vn)
+Leaderboard sản phẩm theo chuyên mục, chủ shop trả tiền để quảng bá sản phẩm.
+
+Đề xuất: module "**Vị trí tài trợ**" (label rõ ràng, tách khỏi review organic) trên totnhat.com.vn — dùng chung engine kỹ thuật với bidtop nhưng khác mặt tiền/brand.
+
+**Vì sao tách khỏi bidtop.vn**:
+1. Đối tượng mua khác tâm lý hoàn toàn — chủ shop bán lẻ quen mua Shopee Ads/Lazada Sponsored, không quen khái niệm "trả tiền cho web ngoài để lên top"; cần UX/copy khác (nhấn "đã bán bao nhiêu", đánh giá shop, không chỉ số tiền bid).
+2. Cấu trúc URL Shopee/Lazada dài, chứa product ID + tracking riêng → logic dedupe/normalize phải viết riêng, không tái dùng nguyên bản domain-based của outbid.lol.
+3. Ngân sách seller nhỏ hơn nhiều SaaS founder → mức bid trần thấp hơn hẳn, để chung 1 board với category SaaS sẽ lệch thẩm mỹ + khó định giá sàn chung.
+4. **Cơ hội monetize kép** mà Nhóm 1 không có: click cuối cùng đổ về Shopee/Lazada thật → vừa thu phí bid, vừa đăng ký Affiliate Shopee/Lazada để ăn thêm hoa hồng trên cùng lượt click.
+5. Đây vốn là phần mở rộng tự nhiên của totnhat.com.vn (đã sẵn nội dung review Shopee/TikTok Shop) — tận dụng traffic + trust sẵn có với đúng đối tượng mua hàng.
+
+### Hướng mở rộng xa hơn (chưa ưu tiên, ghi lại để tham khảo)
+- Bán chính engine dưới dạng B2B SaaS/widget nhúng cho các directory/marketplace khác.
+- Sàn đấu giá tên miền/thương hiệu VN (cần escrow, phức tạp hơn nhiều).
+- Real-time bidding mini cho vị trí quảng cáo (bán chéo cho chính mạng site hiện có: Totnhat, Truongtop, Puriocafe...).
+
+## 8. Category đề xuất cho bidtop.vn (Việt hoá từ 28 category gốc)
+
+**Giữ tinh thần gốc** (đổi tên VN): SEO & AI Visibility, AI Agents & Infrastructure, AI Media Generation, Marketing & Advertising, Developer Tools, Productivity & Personal Tools, Design & Creative, Social Media & Creator Tools, Writing & Content, Sales & Lead Generation, Business/Finance/Legal, Education & Learning, Health/Fitness/Wellness, Directories/Launch/Discovery, Hiring/Jobs/Careers, Agencies/Studios/Services, Travel/Local/Lifestyle, Media & News, Real Estate & Property, Other.
+
+**Cần điều chỉnh**:
+- *People & Profiles*: mở rộng nhận Facebook Page/TikTok/Zalo OA, không chỉ X (Twitter) handle như bản gốc.
+- *Ecommerce & Retail*: CHỈ dành cho phần mềm/nền tảng ecommerce (POS, quản lý kho, checkout tool...), KHÔNG nhận sản phẩm bán lẻ cụ thể — đẩy hết sang Nhóm 2 ở totnhat.com.vn để tránh chồng lấn.
+
+**Nên gộp bớt lúc mới launch** (tránh category trống trơ):
+- Audio, Voice & Podcasting → gộp Media & News
+- Domains & Web Assets + Security/Privacy/Compliance → gộp Business, Finance & Legal
+- Leaderboards & Attention Markets → gộp Other
+- Games & Entertainment → cân nhắc gộp Travel/Lifestyle nếu chưa có nguồn cung ban đầu
+
+**⚠️ Cảnh báo pháp lý riêng — Crypto, Web3 & Investing**: NHNN không công nhận tiền ảo là phương tiện thanh toán; quảng cáo "đầu tư sinh lời" dễ vướng Luật Quảng cáo/Luật Chứng khoán nếu không có giấy phép. Cần kiểm duyệt chặt (không nhận link kêu gọi đầu tư/token sale rõ ràng) hoặc bỏ hẳn ở bản đầu.
+
+**Bổ sung mới — đặc thù VN, khớp portfolio user hiện có**:
+- Du học & Tư vấn du học (khớp CEI)
+- Làm đẹp & Thẩm mỹ (spa, nha khoa, thẩm mỹ viện)
+- Ẩm thực & Quán/Nhà hàng (khớp Puriocafe)
+- Tài chính tiêu dùng & Bảo hiểm (vay tiêu dùng, bảo hiểm)
+- Ô tô & Xe máy (đại lý, gara, app liên quan xe cộ)
+
+## 9. Tiền tệ
+
+Đổi USD → VNĐ — không chỉ đổi ký hiệu mà cả bậc giá. $5 khởi điểm bản gốc ≈ 120.000đ; cần test lại mức giá sàn phù hợp, đồng thời lưu ý phí cổng thanh toán VN (VNPay/Momo/ZaloPay) với giao dịch nhỏ có thể ăn hết margin so với xử lý qua Stripe/thẻ quốc tế.
+
+## 10. Việc chưa quyết / TODO tiếp theo
+
+- [ ] Chốt danh sách category cuối cùng (rút gọn còn ~18–20 mục cho gọn lúc launch)
+- [ ] Viết tech spec + feature spec chi tiết (có thể dùng skill `project-kickoff`)
+- [ ] Quyết cổng thanh toán VN cụ thể (VNPay/Momo/ZaloPay so với Stripe cho khách quốc tế)
+- [ ] Thiết kế module "Vị trí tài trợ" cho totnhat.com.vn (Nhóm 2)
+- [ ] Kiểm tra pháp lý category "Dịch vụ pháp lý" và "Crypto/Web3/Investing" trước khi mở
+- [ ] Kiểm tra domain bidtop.vn còn trống + tra trùng nhãn hiệu
+- [ ] Scaffold code (Next.js + DB + cổng thanh toán)
+
+---
+*Ghi chú OPSEC: khi test/research đối thủ bằng tool bên ngoài, không nhập brand/domain thật của dự án — dùng placeholder.*
+```
+
+File markdown ở trên là toàn bộ context của session này, copy trực tiếp được. Nếu muốn, tôi có thể lưu luôn thành file trong vault (Research/BidTop/) để không mất, hoặc dùng skill `project-kickoff` để biến nội dung này thành CLAUDE.md + tech spec + sprint plan thật cho project code.
