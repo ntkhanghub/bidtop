@@ -20,7 +20,13 @@ are done)
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
-- 2026-08-23 · S1-T3/T4/T5/T6 done · Real Supabase project connected. Fixed a wrong pooler
+- 2026-08-23 · S1-T3 re-verified on the Singapore project · user recreated the Supabase project in
+  `ap-southeast-1` (project ref `fugvcufgrpnnanqxmvrs`, replacing the Seoul one). Same pooler
+  hostname gotcha hit again, this time with two candidate clusters (`aws-0-` and `aws-1-` both
+  resolved via DNS) — tried `aws-0-ap-southeast-1.pooler.supabase.com` first and it was correct.
+  `migrate dev`, `db seed`, `npm test`, `npm run build`, and live-browser homepage check all
+  re-run clean against the new DB.
+- 2026-08-23 · S1-T3/T4/T5/T6 done (Seoul, superseded above) · Real Supabase project connected. Fixed a wrong pooler
   hostname along the way (missing `aws-0-` prefix — see Decisions). `prisma migrate dev` applied
   migration `20260823073758_init` cleanly; `prisma db seed` inserted 21 categories + 3 settings;
   homepage verified live in-browser showing the real DB-sourced empty state; `npm run build`
@@ -85,20 +91,19 @@ reflected back into the spec file. -->
 - 2026-08-23 · Supabase DB role = dedicated `prisma` role (not default `postgres` superuser) ·
   follows Supabase's own official Prisma integration guide (least privilege). Created with
   `bypassrls` explicitly, so it's unaffected by "Automatic RLS on new tables" either way.
-- 2026-08-23 · Supabase project provisioned in `ap-northeast-2` (Seoul), not `ap-southeast-1`
-  (Singapore) as tech-spec assumed · not yet resolved whether to keep it or recreate in Singapore
-  — see Open questions. Cheap to switch now (no real listings/payments exist yet, only seed data).
-- 2026-08-23 · Fixed wrong Supabase pooler hostname · `[region].pooler.supabase.com` doesn't
-  resolve (NXDOMAIN) — needs the pooler cluster prefix, `aws-0-[region].pooler.supabase.com`.
-  Confirmed via `nslookup`. `.env.example` corrected to show the right format so this doesn't
-  repeat.
+- 2026-08-23 · Supabase project recreated in `ap-southeast-1` (Singapore) · resolves the earlier
+  Seoul-vs-Singapore open question — user chose to switch. No real data existed yet, so the old
+  Seoul project's data was simply abandoned, not migrated.
+- 2026-08-23 · Fixed wrong Supabase pooler hostname (twice — Seoul project, then Singapore
+  project) · `[region].pooler.supabase.com` doesn't resolve (NXDOMAIN) — needs a pooler cluster
+  prefix, e.g. `aws-0-[region].pooler.supabase.com`. **The cluster number isn't always `aws-0`** —
+  on the Singapore project both `aws-0-ap-southeast-1` and `aws-1-ap-southeast-1` resolved via DNS
+  as distinct clusters; `aws-0` happened to be the correct one for this project, verified by
+  actually connecting, not assumed. If a future project's connection fails the same way, check
+  both. `.env.example` corrected to flag this explicitly.
 
 ## Blockers & open questions
 <!-- Anything a session had to stop on, waiting for user input. -->
-- **Region decision needed:** keep the Supabase project in Seoul (`ap-northeast-2`), or recreate
-  it in Singapore (`ap-southeast-1`) as tech-spec originally assumed for lower VN latency? Cheap
-  to switch now; gets more disruptive the longer real data accumulates. No sprint deadline, but
-  cleanest to resolve before Sprint 2 starts creating real listings.
 - Vercel account/project not yet connected — needed for S1-T7. The user's to set up (connecting a
   GitHub repo to Vercel, or `vercel login`), unless they'd rather hand over a `VERCEL_TOKEN` for
   CLI-driven deploys.

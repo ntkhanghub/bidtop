@@ -45,11 +45,13 @@ into `prisma.config.ts`'s `datasource.url` (used by the CLI: migrate, seed, stud
 `DATABASE_URL` (pooled) is read by `lib/db.ts`'s `@prisma/adapter-pg` driver adapter at runtime.
 **Acceptance:** `npx prisma migrate dev` runs cleanly against Supabase via `DIRECT_URL`; a runtime
 query against the pooled `DATABASE_URL` succeeds from a local script.
-**Result:** Done. Project provisioned in `ap-northeast-2` (Seoul) — not Singapore as tech-spec
-assumed; open question, see PROGRESS.md. Gotcha hit and fixed: Supabase's pooler hostname needs an
-`aws-0-` prefix (`aws-0-ap-northeast-2.pooler.supabase.com`) — the bare region name
-(`ap-northeast-2.pooler.supabase.com`) doesn't resolve (NXDOMAIN). `.env.example` corrected to
-show the right format.
+**Result:** Done. Initially provisioned in `ap-northeast-2` (Seoul), then recreated by the user in
+`ap-southeast-1` (Singapore, project ref `fugvcufgrpnnanqxmvrs`) to match tech-spec's original
+latency reasoning — re-verified clean on the new project. Gotcha hit twice: Supabase's pooler
+hostname needs a cluster prefix (bare `[region].pooler.supabase.com` doesn't resolve, NXDOMAIN),
+and the prefix isn't always `aws-0-` — the Singapore project had both `aws-0-` and `aws-1-`
+clusters resolve via DNS; `aws-0-` was the one that actually worked, confirmed by connecting, not
+assumed. `.env.example` corrected to flag this.
 
 ### S1-T4 — Core data model migration
 Create `categories`, `listings`, `bids`, `settings`, `admin_users` tables per
