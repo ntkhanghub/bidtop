@@ -13,11 +13,11 @@ settings — exists to feed that write safely or to serve that read attractively
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| Frontend + API | Next.js 15 (App Router, TypeScript) | one codebase for SSR leaderboard pages and API/webhook routes; matches the original outbid.lol's approach |
-| Styling | Tailwind CSS | fast to build/iterate with, no separate CSS files to maintain, pairs naturally with the App Router |
+| Frontend + API | Next.js 16 (App Router, TypeScript, Turbopack) | one codebase for SSR/ISR leaderboard pages and API/webhook routes; matches the original outbid.lol's approach. (Latest stable at scaffold time — "boring/latest," not a hard pin to major version 15.) |
+| Styling | Tailwind CSS v4 | fast to build/iterate with, no separate CSS files to maintain, pairs naturally with the App Router; v4's CSS-first config means no `tailwind.config.ts` unless a future need requires one |
 | Notifications | Toast (sonner) | transient feedback for payment status, admin actions, settings saves — see Conventions in CLAUDE.md for when to use toast vs. inline field errors |
 | Database | PostgreSQL (Supabase, Singapore region) | relational fits the listings/bids ledger; row-level locking on `UPDATE` is what makes the rank engine race-safe for free; Singapore region keeps latency low for VN traffic; managed dashboard/table editor is useful for a solo founder debugging data directly |
-| ORM | Prisma | typed queries, migrations; team already comfortable with it from other projects; works against Supabase's Postgres like any other Postgres instance |
+| ORM | Prisma 7 + `@prisma/adapter-pg` | typed queries, migrations; team already comfortable with it from other projects. Prisma 7 requires a driver adapter for the runtime client and moved CLI datasource config out of `schema.prisma` into `prisma.config.ts` — see External integrations below |
 | Payment | 9Pay | already integrated on ContentSuper.com (existing team experience); IPN webhook + checksum model fits the "rank only after webhook" requirement |
 | Hosting | Vercel | zero-ops for a solo/small team; serverless functions handle the webhook endpoint fine at this traffic scale |
 | Category classification | LLM call (Claude Haiku) at submission time | cheap, no training data needed; accuracy is not launch-critical because admin corrects it at approval (F8) |
@@ -81,10 +81,12 @@ is excluded from analytics events and logs.
   `ANTHROPIC_API_KEY`. Submitted content is untrusted input — never interpolate raw scraped page
   content into a system prompt with instructions in it.
 - **Supabase Postgres** — primary datastore (only its Postgres product is used — Supabase Auth,
-  Storage, and Realtime are explicitly not part of this stack). Auth: env `DATABASE_URL` (pooled,
-  port 6543, for runtime queries) and `DIRECT_URL` (direct, port 5432, for Prisma migrations) —
-  Supabase requires both because its connection pooler doesn't support the session mode Prisma
-  Migrate needs.
+  Storage, and Realtime are explicitly not part of this stack). Two connection strings, wired in
+  two different places (Prisma 7 no longer supports `url`/`directUrl` in `schema.prisma`):
+  `DATABASE_URL` (pooled, port 6543) is read by the runtime `PrismaClient`'s `@prisma/adapter-pg`
+  driver adapter (`lib/db.ts`); `DIRECT_URL` (direct, port 5432) is read by `prisma.config.ts` and
+  used only by the Prisma CLI (`migrate`, `db seed`, `studio`). Both are required because
+  Supabase's pooler doesn't support the session-level features Prisma Migrate needs.
 
 ## Non-functional requirements
 

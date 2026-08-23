@@ -2,10 +2,14 @@
 
 Public leaderboard for Vietnamese businesses (SaaS, agencies, real estate, and 18 other
 categories) where **rank is purely the amount paid** — a VNĐ clone of outbid.lol's mechanic, no
-curation, no quality score. Pre-code phase: docs and sprint plan exist, no source yet.
+curation, no quality score.
 
 **Before doing anything else in a session: read `PROGRESS.md`** — it names the current sprint and
 next task. Do not infer project status from the file tree.
+
+Scaffold exists (S1-T1 done); `DATABASE_URL`/`DIRECT_URL` in `.env` are still placeholders — real
+Supabase credentials are required before `npm run build`, `prisma migrate dev`, or `prisma db
+seed` will work for real (see PROGRESS.md Blockers).
 
 ## Working principles
 Behavioral defaults for every task in this repo — biased toward caution over speed. For trivial
@@ -48,16 +52,23 @@ ceremony.
 - `PROGRESS.md` — live status; update it after every completed task
 
 ## Tech stack
-- Next.js 15 (App Router, TypeScript) — one codebase for SSR leaderboard pages and API/webhook
-  routes
-- Tailwind CSS — all styling; no separate `.css` files beyond `app/globals.css`'s Tailwind
-  directives
+- Next.js 16 (App Router, TypeScript, Turbopack) — one codebase for SSR/ISR leaderboard pages and
+  API/webhook routes. (Tech spec originally said "15"; 16 was current stable at scaffold time —
+  boring/latest-stable was always the intent, not a hard pin to a major version.)
+- Tailwind CSS v4 — CSS-first config via `@import "tailwindcss";` in `app/globals.css` and the
+  `@tailwindcss/postcss` plugin; there is no `tailwind.config.ts` (v4 doesn't need one for this
+  project's needs — don't add one speculatively)
 - Toast notifications via sonner — transient feedback (payment status, admin actions, settings
   saved); see Conventions below for when to use it vs. inline field errors
-- PostgreSQL (Supabase, Singapore region) via Prisma — row-level locking on `UPDATE` is what makes
-  the rank engine race-safe. Only Supabase's Postgres is used — its Auth, Storage, and Realtime
-  products are explicitly out of scope; do not wire them in without asking, since guest checkout
-  with no user accounts is a deliberate decision (see Non-goals)
+- PostgreSQL (Supabase, Singapore region) via Prisma 7 + `@prisma/adapter-pg`. Prisma 7 removed
+  `url`/`directUrl` from `schema.prisma`'s datasource block: the CLI (migrate/seed) reads its
+  connection from `prisma.config.ts` (`DIRECT_URL`, direct/non-pooled), while the runtime
+  `PrismaClient` (`lib/db.ts`) is constructed with a `PrismaPg` driver adapter reading
+  `DATABASE_URL` (pooled) — the two are wired independently, not both in one place. Row-level
+  locking on `UPDATE` is what makes the rank engine race-safe. Only Supabase's Postgres is used —
+  its Auth, Storage, and Realtime products are explicitly out of scope; do not wire them in
+  without asking, since guest checkout with no user accounts is a deliberate decision (see
+  Non-goals)
 - 9Pay — payment gateway (checkout session + IPN webhook), reused integration pattern from
   ContentSuper.com
 - Claude API (Haiku) — one-shot category classification at submission time
@@ -65,38 +76,41 @@ ceremony.
 - No end-user auth system. Admin auth only: session cookie + argon2id password hash, two roles
   (`admin`, `super_admin`)
 
-## Repository layout (planned — created by S1-T1)
+## Repository layout
 ```
 app/
-  (public)/
-    page.tsx                 # homepage leaderboard
-    category/[slug]/page.tsx
-    categories/page.tsx
-    rules/page.tsx
-    about/page.tsx
-    submit/page.tsx
-  admin/                      # protected admin panel
-  api/
-    webhooks/9pay/route.ts    # ONLY place allowed to write listings.amount
-    listings/route.ts
-  globals.css                 # Tailwind directives
+  page.tsx                    # homepage leaderboard (walking skeleton — S1-T6)
+  page.test.tsx
+  layout.tsx                  # mounts sonner's <Toaster />
+  globals.css                 # Tailwind v4 directives
+  (public)/                   # (planned) category/[slug], categories, rules, about, submit
+  admin/                      # (planned, S4) protected admin panel
+  api/webhooks/9pay/          # (planned, S3) ONLY place allowed to write listings.amount
 lib/
-  db.ts                       # Prisma client
-  normalize-identity.ts       # canonical identity_key logic
-  payment/9pay.ts
-  categorize.ts               # LLM category classifier
-prisma/schema.prisma
-tailwind.config.ts
+  db.ts                       # Prisma client (driver adapter, pooled DATABASE_URL)
+  db.test.ts
+  normalize-identity.ts       # (planned, S2) canonical identity_key logic
+  payment/9pay.ts             # (planned, S3)
+  categorize.ts               # (planned, S2) LLM category classifier
+prisma/
+  schema.prisma
+  seed.ts                     # 21 launch categories + default settings
+prisma.config.ts              # CLI datasource (DIRECT_URL) + seed command
 docs/{specs,sprints}/
 PROGRESS.md
 ```
 
-## Commands (to be finalized by S1-T2 — update this section when scaffolding lands)
+## Commands
 - `npm run dev` — run the app locally
-- `npm run build` — production build
-- `npm test` — unit + integration tests
-- `npm run lint && npm run typecheck` — must pass before any commit
-- `npx prisma migrate dev` — apply schema migrations locally
+- `npm run build` — production build (requires real `DATABASE_URL`/`DIRECT_URL` — the homepage
+  queries Postgres at build time via ISR, see `app/page.tsx`)
+- `npm test` — unit tests (Vitest + Testing Library, jsdom)
+- `npm run lint` — ESLint (flat config, Next core-web-vitals + TypeScript + Prettier compat)
+- `npm run typecheck` — `tsc --noEmit`
+- `npm run format` — Prettier, writes in place
+- `npx prisma generate` — regenerate the Prisma Client after any schema change
+- `npx prisma migrate dev` — apply schema migrations locally (needs real `DIRECT_URL`)
+- `npx prisma db seed` — run `prisma/seed.ts` (needs real `DIRECT_URL`)
 
 ## Conventions
 - Money is stored as integer VNĐ (no decimals, no floats) everywhere — `listings.amount`,

@@ -4,7 +4,7 @@
 whole stack connects end to end.
 
 **Demo criteria:** At the end of this sprint you can run the app locally and on Vercel, load the
-homepage, and see it query a real (empty) `listings` table in Neon Postgres — not mock data.
+homepage, and see it query a real (empty) `listings` table in Supabase Postgres — not mock data.
 
 ## In scope
 - Project scaffold, tooling, CI
@@ -18,26 +18,33 @@ homepage, and see it query a real (empty) `listings` table in Neon Postgres — 
 
 ## Tasks
 
-### S1-T1 — Scaffold Next.js 15 + TypeScript project
-Initialize the repo: Next.js 15 App Router, TypeScript, ESLint, Prettier, a test runner (Vitest),
+### S1-T1 — Scaffold Next.js + TypeScript project
+Initialize the repo: Next.js (App Router), TypeScript, ESLint, Prettier, a test runner (Vitest),
 Tailwind CSS, and sonner (toast) with its `<Toaster />` mounted in the root layout. `git init` and
 first commit.
 **Acceptance:** `npm run dev` serves a default page locally; `npm run lint` and `npm run typecheck`
 both pass with zero errors on the fresh scaffold; a Tailwind utility class visibly renders on the
 default page; a test button firing `toast('test')` shows a toast.
+**Result:** scaffolded with Next.js 16.3.2 (latest stable at the time, not 15 — see CLAUDE.md Tech
+stack) and Tailwind v4 (CSS-first, no `tailwind.config.ts`). Verified live in-browser: Tailwind
+computed styles applied, toast fired and rendered. First commit `9833000`.
 
 ### S1-T2 — Finalize CLAUDE.md Commands section
 Replace the placeholder commands in `CLAUDE.md` with the real ones from this scaffold.
 **Acceptance:** every command listed in CLAUDE.md's Commands section has been run at least once
 and does what it claims.
 
-### S1-T3 — Provision Supabase Postgres + Prisma
-Create a Supabase project (Singapore region). Wire two connection strings into Prisma's schema:
-`DATABASE_URL` (pooled, port 6543 — used at runtime) and `DIRECT_URL` (direct, port 5432 — used by
-Prisma Migrate, since Supabase's pooler doesn't support the session mode migrations need). Install
-Prisma, run the initial empty migration.
+### S1-T3 — Provision Supabase Postgres + Prisma — code ready, blocked on real credentials
+Create a Supabase project (Singapore region). Get the pooled connection string (port 6543) and the
+direct connection string (port 5432). Prisma 7 doesn't support `url`/`directUrl` in
+`schema.prisma` — wiring is split: `DIRECT_URL` goes into `prisma.config.ts`'s
+`datasource.url` (used by the CLI: migrate, seed, studio), and `DATABASE_URL` (pooled) is read by
+`lib/db.ts`'s `@prisma/adapter-pg` driver adapter at runtime.
 **Acceptance:** `npx prisma migrate dev` runs cleanly against Supabase via `DIRECT_URL`; a runtime
 query against the pooled `DATABASE_URL` succeeds from a local script.
+**Status:** `prisma.config.ts` and `lib/db.ts` are written and typecheck/lint clean against a
+placeholder `.env` (see `.env.example`). Not yet verified against a real database — needs a real
+Supabase project's connection strings from the user before `migrate dev` can actually run.
 
 ### S1-T4 — Core data model migration
 Create `categories`, `listings`, `bids`, `settings`, `admin_users` tables per
