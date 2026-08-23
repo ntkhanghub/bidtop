@@ -4,8 +4,8 @@ Single source of truth for project status. Every session updates this file after
 task; no session starts work without reading it.
 
 **Current sprint:** Sprint 1 — Foundation
-**Next task:** S1-T3 (blocked — needs real Supabase project credentials from the user, see
-Blockers below; S1-T1 and S1-T2 are done)
+**Next task:** S1-T7 (Vercel deploy — blocked, needs Vercel account access; S1-T1 through S1-T6
+are done)
 
 ## Sprint status
 
@@ -20,17 +20,20 @@ Blockers below; S1-T1 and S1-T2 are done)
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-23 · S1-T3/T4/T5/T6 done · Real Supabase project connected. Fixed a wrong pooler
+  hostname along the way (missing `aws-0-` prefix — see Decisions). `prisma migrate dev` applied
+  migration `20260823073758_init` cleanly; `prisma db seed` inserted 21 categories + 3 settings;
+  homepage verified live in-browser showing the real DB-sourced empty state; `npm run build`
+  succeeds with ISR `revalidate: 30s` confirmed in the build output. Not yet committed (env file
+  itself is gitignored as expected; migration SQL + doc updates pending commit).
 - 2026-08-23 · S1-T4 (partial: schema only) · `prisma/schema.prisma` written for
   categories/listings/bids/settings/admin_users per tech-spec; validated with `prisma
-  validate`/`generate` against a placeholder `.env`. Not yet migrated against a real DB — same
-  blocker as S1-T3. Commit `9833000`.
+  validate`/`generate` against a placeholder `.env`. Commit `9833000`.
 - 2026-08-23 · S1-T5 (partial: script only) · `prisma/seed.ts` written with the 21 categories +
-  default settings; not yet run against a real DB. Commit `9833000`.
+  default settings. Commit `9833000`.
 - 2026-08-23 · S1-T6 (partial: code only) · `app/page.tsx` queries
   `listings WHERE status = 'approved' ORDER BY amount DESC, firstConfirmedAt ASC` with an empty
-  state, `revalidate = 30` (ISR). `npm run build` currently fails against the placeholder `.env`
-  (expected — it tries to prerender against a real DB connection); will pass once real Supabase
-  credentials are set. Commit `9833000`.
+  state, `revalidate = 30` (ISR). Commit `9833000`.
 - 2026-08-23 · S1-T2 done · CLAUDE.md Commands section updated to the real, verified commands
   (dev/build/lint/typecheck/test/format/prisma generate/migrate dev/db seed). Commit `9833000`.
 - 2026-08-23 · S1-T1 done · Scaffolded with Next.js 16.3.2 + Tailwind v4 + sonner + Vitest +
@@ -79,18 +82,26 @@ reflected back into the spec file. -->
   force-dynamic · matches tech-spec's NFR ("leaderboard renders < 1s on the cached path") while
   keeping listings reasonably fresh after a payment. Means `npm run build` needs a real DB
   connection to prerender `/` — expected, not a bug.
+- 2026-08-23 · Supabase DB role = dedicated `prisma` role (not default `postgres` superuser) ·
+  follows Supabase's own official Prisma integration guide (least privilege). Created with
+  `bypassrls` explicitly, so it's unaffected by "Automatic RLS on new tables" either way.
+- 2026-08-23 · Supabase project provisioned in `ap-northeast-2` (Seoul), not `ap-southeast-1`
+  (Singapore) as tech-spec assumed · not yet resolved whether to keep it or recreate in Singapore
+  — see Open questions. Cheap to switch now (no real listings/payments exist yet, only seed data).
+- 2026-08-23 · Fixed wrong Supabase pooler hostname · `[region].pooler.supabase.com` doesn't
+  resolve (NXDOMAIN) — needs the pooler cluster prefix, `aws-0-[region].pooler.supabase.com`.
+  Confirmed via `nslookup`. `.env.example` corrected to show the right format so this doesn't
+  repeat.
 
 ## Blockers & open questions
 <!-- Anything a session had to stop on, waiting for user input. -->
-- **Blocking Sprint 1 right now:** need a real Supabase project (Singapore region) — the pooled
-  connection string (port 6543) for `DATABASE_URL` and the direct one (port 5432) for
-  `DIRECT_URL`. Without these, S1-T3 through S1-T7 cannot be verified against a real database
-  (schema/seed/homepage code is written and typechecks, but is unverified against Postgres), and
-  `npm run build` will keep failing. Creating the Supabase account/project is the user's to do —
-  see CLAUDE.md Prohibited-actions equivalent (account creation).
-- Vercel account/project not yet connected — needed for S1-T7. Also the user's to set up
-  (connecting a GitHub repo to Vercel, or `vercel login`), unless they'd rather hand over a
-  `VERCEL_TOKEN` for CLI-driven deploys.
+- **Region decision needed:** keep the Supabase project in Seoul (`ap-northeast-2`), or recreate
+  it in Singapore (`ap-southeast-1`) as tech-spec originally assumed for lower VN latency? Cheap
+  to switch now; gets more disruptive the longer real data accumulates. No sprint deadline, but
+  cleanest to resolve before Sprint 2 starts creating real listings.
+- Vercel account/project not yet connected — needed for S1-T7. The user's to set up (connecting a
+  GitHub repo to Vercel, or `vercel login`), unless they'd rather hand over a `VERCEL_TOKEN` for
+  CLI-driven deploys.
 - 9Pay merchant credentials: new account for BidTop.vn, or reuse ContentSuper.com's? Must resolve
   before Sprint 3 (see tech-spec.md Open questions).
 - bidtop.vn domain/trademark availability not yet confirmed — must resolve before Sprint 6.

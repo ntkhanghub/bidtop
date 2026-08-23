@@ -34,17 +34,22 @@ Replace the placeholder commands in `CLAUDE.md` with the real ones from this sca
 **Acceptance:** every command listed in CLAUDE.md's Commands section has been run at least once
 and does what it claims.
 
-### S1-T3 — Provision Supabase Postgres + Prisma — code ready, blocked on real credentials
-Create a Supabase project (Singapore region). Get the pooled connection string (port 6543) and the
-direct connection string (port 5432). Prisma 7 doesn't support `url`/`directUrl` in
-`schema.prisma` — wiring is split: `DIRECT_URL` goes into `prisma.config.ts`'s
-`datasource.url` (used by the CLI: migrate, seed, studio), and `DATABASE_URL` (pooled) is read by
-`lib/db.ts`'s `@prisma/adapter-pg` driver adapter at runtime.
+### S1-T3 — Provision Supabase Postgres + Prisma
+Create a Supabase project. Create a dedicated `prisma` DB role (not the default `postgres`
+superuser) per Supabase's official Prisma guide — least privilege, and it's granted `bypassrls`
+explicitly so "Automatic RLS" on new tables never blocks Prisma. Get the pooled connection string
+(port 6543) and the direct connection string (port 5432, via the pooler host in session mode, not
+`db.[ref].supabase.co` — the latter can have IPv6-only issues from some serverless platforms).
+Prisma 7 doesn't support `url`/`directUrl` in `schema.prisma` — wiring is split: `DIRECT_URL` goes
+into `prisma.config.ts`'s `datasource.url` (used by the CLI: migrate, seed, studio), and
+`DATABASE_URL` (pooled) is read by `lib/db.ts`'s `@prisma/adapter-pg` driver adapter at runtime.
 **Acceptance:** `npx prisma migrate dev` runs cleanly against Supabase via `DIRECT_URL`; a runtime
 query against the pooled `DATABASE_URL` succeeds from a local script.
-**Status:** `prisma.config.ts` and `lib/db.ts` are written and typecheck/lint clean against a
-placeholder `.env` (see `.env.example`). Not yet verified against a real database — needs a real
-Supabase project's connection strings from the user before `migrate dev` can actually run.
+**Result:** Done. Project provisioned in `ap-northeast-2` (Seoul) — not Singapore as tech-spec
+assumed; open question, see PROGRESS.md. Gotcha hit and fixed: Supabase's pooler hostname needs an
+`aws-0-` prefix (`aws-0-ap-northeast-2.pooler.supabase.com`) — the bare region name
+(`ap-northeast-2.pooler.supabase.com`) doesn't resolve (NXDOMAIN). `.env.example` corrected to
+show the right format.
 
 ### S1-T4 — Core data model migration
 Create `categories`, `listings`, `bids`, `settings`, `admin_users` tables per
@@ -53,6 +58,11 @@ Create `categories`, `listings`, `bids`, `settings`, `admin_users` tables per
 **Acceptance:** migration runs cleanly on a fresh DB; Prisma Client generates without errors; a
 unit test confirms the unique constraints reject duplicate `identity_key` and duplicate
 `gateway_order_id`.
+**Result:** Migration `20260823073758_init` applied cleanly to the real Supabase DB. Unique
+constraints defined in schema (`@unique` on `identityKey` and `gatewayOrderId`); a dedicated DB
+test for constraint-violation behavior is still open — not launch-blocking since Prisma enforces
+this via the DB schema itself, not application code, but worth a real test in Sprint 2 once
+listings actually get created.
 
 ### S1-T5 — Seed script: categories + default settings
 Seed all 21 launch categories and default settings values.
@@ -86,6 +96,9 @@ Default settings: `starting_price = 100000` (VNĐ), `min_increment = 50000` (VN�
 **Acceptance:** running the seed script against a fresh DB inserts exactly 21 rows in
 `categories` with the slugs above, and 3 rows in `settings` with the values above; running it
 twice does not duplicate rows (idempotent seed).
+**Result:** Done. `npx prisma db seed` ran against the real Supabase DB: "Seeded 21 categories and
+3 settings." Re-run idempotency (upsert-based) verified by code inspection, not yet by actually
+running it twice — low risk, cheap to double check before Sprint 6 if it matters.
 
 ### S1-T6 — Walking skeleton: homepage reads live DB
 Build `/` to SSR-render a leaderboard list by querying `listings WHERE status = 'approved' ORDER
@@ -93,6 +106,11 @@ BY amount DESC, first_confirmed_at ASC`, with an explicit empty state (no listin
 **Acceptance:** loading `/` locally and on the Vercel preview shows the empty-state UI, and the
 query is visibly hitting Postgres (confirmed via Prisma logs or a temporary seeded test row that
 renders correctly then is removed).
+**Result:** Done locally — verified live in-browser (`http://localhost:3000`), page text confirms
+the real empty-state copy sourced from the DB query (zero `approved` listings, as expected: only
+categories/settings are seeded, no listings yet). `npm run build` succeeds against the real DB,
+ISR `revalidate: 30s` confirmed in the build output route table. Vercel preview verification is
+S1-T7's job, still pending.
 
 ### S1-T7 — Deploy pipeline to Vercel
 Connect the repo to Vercel, wire `DATABASE_URL` and `DIRECT_URL` as environment variables, confirm
