@@ -120,12 +120,10 @@ BY amount DESC, first_confirmed_at ASC` via `lib/supabase/server.ts`, with an ex
 **Acceptance:** loading `/` locally and on the Vercel preview shows the empty-state UI, and the
 query is visibly hitting Postgres (confirmed via a temporary seeded test row that renders correctly
 then is removed, or by inspecting Supabase's logs).
-**Result:** Verified once against the Prisma-based implementation (live in-browser empty state,
-`npm run build` succeeding with ISR `revalidate: 30s` in the route table). Re-implemented against
-`@supabase/supabase-js` after the data-layer switch — code is typechecked/linted clean, but
-re-verification against a live DB (need `NEXT_PUBLIC_SUPABASE_URL` /
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` from the user) is pending. Vercel
-preview verification is S1-T7's job, still pending regardless.
+**Result:** Done. Re-implemented against `@supabase/supabase-js` after the data-layer switch and
+re-verified against the real, live DB: `npm test`/`npm run build`/`npm run lint`/`npm run
+typecheck` all pass, live browser confirmed the empty-state copy sourced from the real query. Also
+confirmed independently by S1-T7's production build succeeding.
 
 ### S1-T7 — Deploy pipeline to Vercel
 Connect the repo to Vercel, wire `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
@@ -134,6 +132,9 @@ dev-tooling-only and never needed by the deployed app), confirm a push to main t
 deploy.
 **Acceptance:** the Vercel production URL serves the same homepage as local dev, reading from the
 same Supabase database.
+**Result:** Done. User connected the repo to Vercel and added the 3 env vars; production build of
+commit `cd3b8ae` succeeded (Next.js 16.3.2, Turbopack, TypeScript check passed, page data
+collection against the real Supabase DB succeeded).
 
 ## Dependencies
 None — this is the first sprint.
@@ -144,7 +145,7 @@ None — this is the first sprint.
   (one init migration); revisit if this becomes error-prone once Sprint 2+ adds more migrations.
 
 ## Definition of Done
-- [ ] All tasks meet their acceptance criteria
-- [ ] Demo criteria verified end-to-end (local + deployed)
-- [ ] Lint, typecheck, and tests pass; no skipped tests introduced
+- [x] All tasks meet their acceptance criteria
+- [x] Demo criteria verified end-to-end (local + deployed)
+- [x] Lint, typecheck, and tests pass; no skipped tests introduced
 - [ ] PROGRESS.md updated; user has reviewed the demo

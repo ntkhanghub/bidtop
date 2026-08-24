@@ -3,14 +3,14 @@
 Single source of truth for project status. Every session updates this file after each completed
 task; no session starts work without reading it.
 
-**Current sprint:** Sprint 1 — Foundation
-**Next task:** S1-T7 — Vercel deploy (blocked — needs Vercel account access)
+**Current sprint:** Sprint 1 — Foundation (done — awaiting user review before Sprint 2 starts)
+**Next task:** S2-T1, pending user go-ahead to start Sprint 2
 
 ## Sprint status
 
 | # | Sprint | Status | Started | Finished |
 |---|--------|--------|---------|----------|
-| 1 | Foundation | In progress | 2026-08-23 | — |
+| 1 | Foundation | Done | 2026-08-23 | 2026-08-24 |
 | 2 | Listing submission & identity normalization | Not started | — | — |
 | 3 | Payment integration & atomic rank engine | Not started | — | — |
 | 4 | Admin panel & moderation | Not started | — | — |
@@ -19,6 +19,21 @@ task; no session starts work without reading it.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-24 · S1-T7 done, Sprint 1 complete · User connected the GitHub repo to Vercel, added
+  `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` as Vercel
+  env vars. Production build of commit `cd3b8ae` succeeded (Next.js 16.3.2/Turbopack, TypeScript
+  check passed, page data collection against the real Supabase DB succeeded). All of Sprint 1's
+  Definition of Done items are met except final user review.
+- 2026-08-24 · Repushed to GitHub with corrected commit authorship · user deleted and recreated
+  `github.com/ntkhanghub/bidtop`, then asked to rewrite all 5 existing local commits' author from
+  `ntkhang888@gmail.com` to `ntkhang@gmail.com` before the first push (safe — nothing had been
+  shared yet at the time... except origin/master turned out to already have identical content,
+  apparently pushed independently via another session/device, e.g. Remote Control on mobile).
+  Confirmed via `git fetch` before touching anything. Rewrote all 5 commits with
+  `git rebase --root --exec 'git commit --amend --author=...'`, then `git push --force` after
+  explicit confirmation (force-push flagged and confirmed separately, since it overwrote existing
+  remote content). `origin/master` now matches local exactly, all commits show
+  `Khang Nguyen <ntkhang@gmail.com>` as both author and committer.
 - 2026-08-24 · S1-T6 re-verified against supabase-js data layer · Fixed missing GRANT statements in
   `20260823_init.sql` (tables created by `prisma` role weren't accessible to `service_role` —
   added `GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role` and `GRANT SELECT ON
@@ -152,10 +167,6 @@ reflected back into the spec file. -->
 
 ## Blockers & open questions
 <!-- Anything a session had to stop on, waiting for user input. -->
-- **S1-T6 done.** ~~Blocking S1-T6 re-verification right now: need env vars~~ — resolved.
-- Vercel account/project not yet connected — needed for S1-T7. The user's to set up (connecting a
-  GitHub repo to Vercel, or `vercel login`), unless they'd rather hand over a `VERCEL_TOKEN` for
-  CLI-driven deploys.
 - 9Pay merchant credentials: new account for BidTop.vn, or reuse ContentSuper.com's? Must resolve
   before Sprint 3 (see tech-spec.md Open questions).
 - bidtop.vn domain/trademark availability not yet confirmed — must resolve before Sprint 6.
