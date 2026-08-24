@@ -4,15 +4,16 @@ import type { AdminRole } from "@/lib/supabase/database.types";
 export const SESSION_COOKIE = "bidtop_admin_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24; // 24h — small fixed set of admin accounts, no "remember me"
 
-type SessionPayload = { adminId: string; role: AdminRole; exp: number };
+type SessionPayload = { adminId: string; email: string; role: AdminRole; exp: number };
 
 function sign(payloadB64: string): string {
   return createHmac("sha256", process.env.ADMIN_SESSION_SECRET!).update(payloadB64).digest("base64url");
 }
 
-export function createSessionToken(adminId: string, role: AdminRole): string {
+export function createSessionToken(adminId: string, email: string, role: AdminRole): string {
   const payload: SessionPayload = {
     adminId,
+    email,
     role,
     exp: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
   };

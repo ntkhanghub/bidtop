@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
   const { data: admin } = await supabase
     .from("admin_users")
-    .select("id, password_hash, role")
+    .select("id, email, password_hash, role")
     .eq("email", email.toLowerCase())
     .maybeSingle();
 
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sai email hoặc mật khẩu." }, { status: 401 });
   }
 
-  const token = createSessionToken(admin.id, admin.role);
+  const token = createSessionToken(admin.id, admin.email, admin.role);
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,

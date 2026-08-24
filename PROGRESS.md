@@ -23,6 +23,17 @@ standing between this app and a safe public launch (see Blockers).
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-24 · Admin UI: top-nav → left sidebar (not a sprint task — user asked after reviewing
+  Sprint 4's UI as "too rough") · Mocked with the `design` skill first, approved, then implemented:
+  `app/admin/(protected)/sidebar-nav.tsx` (brand + nav, active-state via `usePathname`) and
+  `account-menu.tsx` (avatar/email/role/logout, replaces the old `logout-button.tsx`) replace the
+  old horizontal top bar in `layout.tsx`. Session token now carries `email` (added to
+  `lib/auth/session.ts`'s payload and `app/api/admin/login/route.ts`) so the sidebar can show it
+  without an extra DB query per page load — old pre-change session cookies don't have it, so
+  existing logins needed to re-authenticate once. Role-gating logic itself untouched (same
+  `session.role === "super_admin"` check, already verified in Sprint 4). Verified live: nav
+  active-state switches correctly between `/admin` and `/admin/settings`, logout works. Lint/
+  typecheck/`npm test`(14/14)/`npm run build` all pass.
 - 2026-08-24 · Sprint 4 done (S4-T1 through S4-T5) · Admin auth (`lib/auth/{password,session,
   require-admin}.ts`, `app/api/admin/{login,logout}`, `app/admin/login`) — stateless HMAC-signed
   httpOnly session cookie (no sessions table, `ADMIN_SESSION_SECRET`), argon2id via
