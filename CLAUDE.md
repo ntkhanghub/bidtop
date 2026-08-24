@@ -7,7 +7,7 @@ curation, no quality score.
 **Before doing anything else in a session: read `PROGRESS.md`** — it names the current sprint and
 next task. Do not infer project status from the file tree.
 
-Scaffold exists (Sprint 1 in progress). Data access is `@supabase/supabase-js` against a real
+Scaffold exists (Sprint 4 in progress — see PROGRESS.md). Data access is `@supabase/supabase-js` against a real
 Supabase project — not Prisma/an ORM, a deliberate mid-project switch (see PROGRESS.md Decisions
 for why). `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`
 in `.env` are needed for the app to run for real; see PROGRESS.md Blockers for current status.
@@ -73,12 +73,14 @@ ceremony.
   Safety rules. Only Supabase's Postgres is used — its Auth, Storage, and Realtime products are
   explicitly out of scope; do not wire them in without asking, since guest checkout with no user
   accounts is a deliberate decision (see Non-goals)
-- 9Pay — payment gateway (checkout session + IPN webhook), reused integration pattern from
-  ContentSuper.com
+- ZaloPay — payment gateway (checkout session + IPN webhook); real integration deferred to
+  Sprint 3 (see PROGRESS.md Decisions — supersedes the original 9Pay choice)
 - Claude API (Haiku) — one-shot category classification at submission time
 - Vercel — hosting, zero-ops
-- No end-user auth system. Admin auth only: session cookie + argon2id password hash, two roles
-  (`admin`, `super_admin`)
+- No end-user auth system. Admin auth only: stateless HMAC-signed httpOnly session cookie
+  (`lib/auth/session.ts`, no sessions table) + argon2id password hash (`@node-rs/argon2`, chosen
+  over the native-binding `argon2` package for more reliable Vercel builds), two roles (`admin`,
+  `super_admin`). No admin self-registration — accounts are seeded via `scripts/seed-admin.mjs`.
 
 ## Repository layout
 ```
@@ -87,9 +89,14 @@ app/
   layout.tsx                  # mounts sonner's <Toaster />
   globals.css                 # Tailwind v4 directives
   (public)/                   # (planned) category/[slug], categories, rules, about, submit
-  admin/                      # (planned, S4) protected admin panel
-  api/webhooks/9pay/          # (planned, S3) ONLY place allowed to call increment_listing_amount()
+  admin/(protected)/          # S4 — login-gated: pending queue (/admin), settings (super_admin)
+  admin/login/                # S4 — public login page
+  api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject}, settings
+  api/payments/mock-confirm/  # TEMPORARY stand-in for the ZaloPay webhook, see its file comment
+  api/webhooks/9pay/          # (planned, S3 — gateway now ZaloPay, see PROGRESS.md Decisions)
 lib/
+  auth/                       # S4 — password.ts (argon2id), session.ts (signed cookie),
+                               # require-admin.ts (server-side role checks for pages/routes)
   supabase/
     server.ts                 # service_role client (server-only, RLS bypassed)
     server.test.ts
@@ -119,6 +126,9 @@ PROGRESS.md
   (needs `DIRECT_URL`). Additive migrations only after Sprint 1 — never reuse the DROP-based init
   pattern once real data exists.
 - `npm run db:seed` — apply `supabase/seed.sql` (needs `DIRECT_URL`, safe to re-run)
+- `node scripts/seed-admin.mjs <email> [admin|super_admin]` — create/update an admin account
+  (upsert by email); prints a random password once, never stored anywhere else. The only way to
+  create admin accounts — there's no self-registration UI by design.
 
 ## Conventions
 - Money is stored as integer VNĐ (no decimals, no floats) everywhere — `listings.amount`,
@@ -151,7 +161,8 @@ PROGRESS.md
   `NEXT_PUBLIC_SUPABASE_ANON_KEY` — browser-safe by design, but currently unused by any code;
   `DATABASE_URL`/`DIRECT_URL` — dev-tooling-only direct Postgres connection for
   `scripts/apply-migration.mjs`; `ANTHROPIC_API_KEY`; `NINE_PAY_MERCHANT_KEY`,
-  `NINE_PAY_SECRET_KEY`); keep `.env.example` current and `.env` gitignored. If a secret ever
+  `NINE_PAY_SECRET_KEY`; `ADMIN_SESSION_SECRET` — signs the admin session cookie, see
+  `lib/auth/session.ts`); keep `.env.example` current and `.env` gitignored. If a secret ever
   lands in a commit, stop and tell the user — rotating it is their call.
 - Ask before anything destructive or hard to reverse: dropping/altering DB tables with data,
   deleting files outside the repo, force-pushing, and anything touching production. Migrations in
@@ -161,14 +172,19 @@ PROGRESS.md
   (typosquatting) and the license before adding. No new dependency for something under ~20 lines.
 - Never commit with failing checks and never bypass hooks (`--no-verify`).
 - No real user data (real emails, real payment details) in tests, fixtures, or logs.
-- **Rank integrity is the core threat model.** Only the verified 9Pay IPN webhook handler
-  (`app/api/webhooks/9pay/route.ts`) may call `increment_listing_amount()` (the only way
-  `listings.amount`/`first_confirmed_at` change) — never a read-modify-write from application
-  code, never from the submit form, never from the `return_url` redirect handler. The function has
-  `EXECUTE` revoked from `anon`/`authenticated` at the DB level, not just gated in app code.
-- Payments: no card data ever touches our servers or logs — 9Pay's hosted checkout only. Every
-  inbound webhook call verifies the checksum/signature before any processing; an invalid signature
-  is rejected outright.
+- **Rank integrity is the core threat model.** Only the verified gateway IPN webhook handler (the
+  planned `app/api/webhooks/9pay/route.ts` — gateway now ZaloPay, not yet built, see PROGRESS.md
+  Decisions) may call `increment_listing_amount()` (the only way `listings.amount`/
+  `first_confirmed_at` change) — never a read-modify-write from application code, never from the
+  submit form, never from the `return_url` redirect handler. The function has `EXECUTE` revoked
+  from `anon`/`authenticated` at the DB level, not just gated in app code (service_role must be
+  explicitly re-granted `EXECUTE`, see `supabase/migrations/20260824_grant_rank_engine_execute.sql`).
+  **Temporary exception:** `app/api/payments/mock-confirm/route.ts` also calls it — an
+  interim stand-in for the real webhook, deliberately ungated (reachable in production), an
+  accepted pre-launch risk per explicit user decision. Must be deleted once the real webhook lands.
+- Payments: no card data ever touches our servers or logs — the gateway's hosted checkout only
+  (ZaloPay, see PROGRESS.md Decisions). Every inbound webhook call verifies the checksum/signature
+  before any processing; an invalid signature is rejected outright.
 - Idempotency: `bids.gateway_order_id` is unique; the webhook handler always checks existing
   `bids.status` before applying an amount increment, so retried deliveries are safe no-ops.
 - All submission input (URLs, handles, bid amounts) is validated server-side (zod) at the API

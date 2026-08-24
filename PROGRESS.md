@@ -3,11 +3,12 @@
 Single source of truth for project status. Every session updates this file after each completed
 task; no session starts work without reading it.
 
-**Current sprint:** Sprint 2 — Listing submission & identity normalization (done — awaiting user
-review before Sprint 3 starts). An interim mock-payment step (see task log below) now makes the
-submit workflow demoable end-to-end ahead of Sprint 3's real gateway work.
-**Next task:** S3-T1, pending user go-ahead to start Sprint 3 (now targeting ZaloPay — see
-Decisions)
+**Current sprint:** Sprint 4 — Admin panel & moderation (done — awaiting user review). Built ahead
+of Sprint 3's real payment gateway, using the interim mock-payment step (see task log below) to
+satisfy Sprint 4's dependency on real `paid_pending_review` rows.
+**Next task:** awaiting user direction — either S3-T1 (real ZaloPay integration, still not started)
+or Sprint 5 (public leaderboard & growth). Sprint 3's real gateway work remains the one thing
+standing between this app and a safe public launch (see Blockers).
 
 ## Sprint status
 
@@ -15,13 +16,40 @@ Decisions)
 |---|--------|--------|---------|----------|
 | 1 | Foundation | Done | 2026-08-23 | 2026-08-24 |
 | 2 | Listing submission & identity normalization | Done | 2026-08-24 | 2026-08-24 |
-| 3 | Payment integration & atomic rank engine | Not started | — | — |
-| 4 | Admin panel & moderation | Not started | — | — |
+| 3 | Payment integration & atomic rank engine | Not started (real gateway deferred; interim mock unblocks Sprint 4) | — | — |
+| 4 | Admin panel & moderation | Done | 2026-08-24 | 2026-08-24 |
 | 5 | Public leaderboard & growth features | Not started | — | — |
 | 6 | Hardening & launch | Not started | — | — |
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-24 · Sprint 4 done (S4-T1 through S4-T5) · Admin auth (`lib/auth/{password,session,
+  require-admin}.ts`, `app/api/admin/{login,logout}`, `app/admin/login`) — stateless HMAC-signed
+  httpOnly session cookie (no sessions table, `ADMIN_SESSION_SECRET`), argon2id via
+  `@node-rs/argon2` (picked over the native-binding `argon2` package for reliable Vercel builds).
+  First `super_admin` (`ntkhang@gmail.com`) seeded via `scripts/seed-admin.mjs`, a one-off script
+  with no public sign-up path. Role enforcement (`requireAdminPage`/`requireAdminApi`) is shared by
+  every admin page and route; verified a plain `admin` session gets a real HTTP 403 on both
+  `/admin/settings` (via Next's `forbidden()`, needed enabling `experimental.authInterrupts` in
+  `next.config.ts`) and the underlying `POST /api/admin/settings`, not just a hidden nav link.
+  Pending-review queue (`app/admin/(protected)/page.tsx`) lists `paid_pending_review` listings with
+  an editable category dropdown; approve/reject actions
+  (`app/api/admin/listings/[id]/{approve,reject}`) require a non-empty reason to reject and log
+  who/when via two new `listings` columns (`reviewed_by`, `reviewed_at` — additive migration
+  `20260824_listings_review_audit.sql`, applied to production with user confirmation) rather than a
+  separate audit table, since only the latest review matters here. Settings page
+  (`app/admin/(protected)/settings`) edits `starting_price`/`min_increment`/`vat_percent`
+  (super_admin only), uses sonner toast for save feedback per CLAUDE.md's convention. Verified live
+  against the real Supabase DB end-to-end: login/logout/wrong-password/unauthenticated-redirect;
+  approve (category correction persists, listing appears on the public homepage immediately);
+  reject (empty-reason blocked client-side, reason persisted, listing never appears publicly);
+  settings save takes effect immediately for new submissions without touching existing listings'
+  `amount`; plain-admin 403 on both settings surfaces. All test rows/accounts cleaned up
+  afterward, production settings restored to their original values. Lint/typecheck/`npm test`
+  (14/14)/`npm run build` all pass. **Known gap, not fixed:** deleting/demoting an admin doesn't
+  invalidate their already-issued session token (stateless cookie, no revocation list) — it stays
+  valid until its 24h expiry. Acceptable for a small fixed set of trusted admins; would need
+  revisiting if that assumption changes.
 - 2026-08-24 · Interim mock payment step (not a numbered sprint task — unblocks demoing the submit
   flow before Sprint 3's real gateway exists) · Added `app/api/payments/mock-confirm/route.ts`, the
   only new caller of `increment_listing_amount()` besides the future gateway webhook — the submit
@@ -122,6 +150,18 @@ Decisions)
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
+- 2026-08-24 · Admin sessions are a stateless HMAC-signed httpOnly cookie, no `admin_sessions`
+  table · tech-spec only said "session cookie", didn't specify storage; matches "small, fixed set
+  of admin accounts, no managed auth provider" already decided. Trade-off: no way to force-revoke a
+  session early (see Blockers) — acceptable for now, would need a real store if that changes.
+- 2026-08-24 · argon2id via `@node-rs/argon2`, not the `argon2` npm package · both implement
+  argon2id (CLAUDE.md's required scheme), but `@node-rs/argon2` ships prebuilt napi-rs binaries
+  instead of compiling a native addon via node-gyp at install time — meaningfully lower risk on
+  Vercel's build image. Confirmed Argon2id is its default algorithm (no explicit option needed).
+- 2026-08-24 · S4-T4's "who/when" audit requirement is 2 columns on `listings`
+  (`reviewed_by`/`reviewed_at`), not a separate audit-log table · the moderation queue only ever
+  needs the most recent review, not full history; a dedicated table would be unused complexity for
+  what F8 actually asks for.
 - 2026-08-24 · **Supersedes the entry below** — Payment gateway switched to ZaloPay (real
   integration deferred, to be done when Sprint 3 actually starts) · user's explicit call, no reason
   given beyond preferring ZaloPay over 9Pay. Not yet reflected in tech-spec.md/CLAUDE.md's 9Pay
