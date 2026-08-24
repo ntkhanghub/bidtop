@@ -3,15 +3,16 @@
 Single source of truth for project status. Every session updates this file after each completed
 task; no session starts work without reading it.
 
-**Current sprint:** Sprint 1 — Foundation (done — awaiting user review before Sprint 2 starts)
-**Next task:** S2-T1, pending user go-ahead to start Sprint 2
+**Current sprint:** Sprint 2 — Listing submission & identity normalization (done — awaiting user
+review before Sprint 3 starts)
+**Next task:** S3-T1, pending user go-ahead to start Sprint 3
 
 ## Sprint status
 
 | # | Sprint | Status | Started | Finished |
 |---|--------|--------|---------|----------|
 | 1 | Foundation | Done | 2026-08-23 | 2026-08-24 |
-| 2 | Listing submission & identity normalization | Not started | — | — |
+| 2 | Listing submission & identity normalization | Done | 2026-08-24 | 2026-08-24 |
 | 3 | Payment integration & atomic rank engine | Not started | — | — |
 | 4 | Admin panel & moderation | Not started | — | — |
 | 5 | Public leaderboard & growth features | Not started | — | — |
@@ -19,6 +20,16 @@ task; no session starts work without reading it.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-24 · Sprint 2 done (S2-T1 through S2-T5) · `lib/normalize-identity.ts`,
+  `lib/content-validation.ts`, `lib/categorize.ts`, `/submit` page + form, `/api/listings/{lookup,
+  classify,submit}`. Caught a real bug during S2-T1's own tests: Play Store differentiates apps via
+  `?id=`, not path — fixed before it ever shipped. Verified the entire flow live against the real
+  Supabase DB (not mocks): new listing creation, below-minimum rejection, banned-link (Telegram)
+  rejection, top-up on an existing listing (same `listings.id`, second `bids` row, `amount` still
+  untouched pre-payment), and mismatched-email rejection. All test rows cleaned up afterward.
+  20/20 unit tests pass, lint/typecheck clean. One piece unverified: S2-T4's actual Claude API
+  response — `ANTHROPIC_API_KEY` isn't set (see Blockers); the code's fallback-to-"other" path is
+  what's been exercised so far, not a real classification.
 - 2026-08-24 · S1-T7 done, Sprint 1 complete · User connected the GitHub repo to Vercel, added
   `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` as Vercel
   env vars. Production build of commit `cd3b8ae` succeeded (Next.js 16.3.2/Turbopack, TypeScript
@@ -167,6 +178,11 @@ reflected back into the spec file. -->
 
 ## Blockers & open questions
 <!-- Anything a session had to stop on, waiting for user input. -->
+- `ANTHROPIC_API_KEY` not set in `.env` — needed to verify S2-T4's category classifier (`lib/
+  categorize.ts`) against a real Claude response. Not launch-blocking for Sprint 2 itself (the code
+  gracefully falls back to `"other"` without it, and F5's design already treats classifier
+  correctness as non-critical since admin corrects it at approval), but should be resolved before
+  trusting the suggestion quality in a real demo.
 - 9Pay merchant credentials: new account for BidTop.vn, or reuse ContentSuper.com's? Must resolve
   before Sprint 3 (see tech-spec.md Open questions).
 - bidtop.vn domain/trademark availability not yet confirmed — must resolve before Sprint 6.
