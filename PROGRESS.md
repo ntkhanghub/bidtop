@@ -4,8 +4,10 @@ Single source of truth for project status. Every session updates this file after
 task; no session starts work without reading it.
 
 **Current sprint:** Sprint 2 — Listing submission & identity normalization (done — awaiting user
-review before Sprint 3 starts)
-**Next task:** S3-T1, pending user go-ahead to start Sprint 3
+review before Sprint 3 starts). An interim mock-payment step (see task log below) now makes the
+submit workflow demoable end-to-end ahead of Sprint 3's real gateway work.
+**Next task:** S3-T1, pending user go-ahead to start Sprint 3 (now targeting ZaloPay — see
+Decisions)
 
 ## Sprint status
 
@@ -20,6 +22,27 @@ review before Sprint 3 starts)
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-24 · Interim mock payment step (not a numbered sprint task — unblocks demoing the submit
+  flow before Sprint 3's real gateway exists) · Added `app/api/payments/mock-confirm/route.ts`, the
+  only new caller of `increment_listing_amount()` besides the future gateway webhook — the submit
+  form and `/submit/pending` still never touch `listings.amount` directly, matching CLAUDE.md's
+  rank-integrity rule. `/submit/pending` (now a client component, `pending-confirm.tsx`) auto-fires
+  the mock confirm on load instead of the old static placeholder text. Per explicit user decision,
+  this mock always "succeeds" and is **not** gated to non-production — it is reachable on the live
+  Vercel deployment too; see Decisions and Blockers. While verifying live against the real Supabase
+  DB, caught and fixed a real bug: `increment_listing_amount()` returned `permission denied`
+  (`42501`) for every call made the way real callers actually call it (via `service_role` through
+  supabase-js) — the init migration's `revoke all ... from public, anon, authenticated` had silently
+  stripped `service_role`'s implicit PUBLIC-granted EXECUTE too, and nothing re-granted it. Never
+  caught before because S1's only test of this function (`scripts/verify-atomic-increment.mjs`) used
+  a direct `pg` connection as the `prisma` role, not the app's real path. Fixed with an additive
+  migration, `supabase/migrations/20260824_grant_rank_engine_execute.sql`
+  (`grant execute ... to service_role`), applied to production with user confirmation. Verified live:
+  new-listing submit → mock-confirm → `amount`/`first_confirmed_at`/`status` (`paid_pending_review`)
+  all correct; reloading the confirm step is a no-op (idempotent, `updated_at` unchanged); the failed
+  first attempt (pre-fix) left its bid `pending` with zero listing write — no partial state; homepage
+  correctly still excludes the unapproved test listing. Test rows cleaned up afterward. Lint/
+  typecheck/`npm test` (14/14) all pass.
 - 2026-08-24 · Sprint 2 done (S2-T1 through S2-T5) · `lib/normalize-identity.ts`,
   `lib/content-validation.ts`, `lib/categorize.ts`, `/submit` page + form, `/api/listings/{lookup,
   classify,submit}`. Caught a real bug during S2-T1's own tests: Play Store differentiates apps via
@@ -99,8 +122,20 @@ review before Sprint 3 starts)
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
-- 2026-08-23 · Payment gateway = 9Pay (not VNPay/Momo/ZaloPay/Stripe) · team already has a working
-  integration on ContentSuper.com.
+- 2026-08-24 · **Supersedes the entry below** — Payment gateway switched to ZaloPay (real
+  integration deferred, to be done when Sprint 3 actually starts) · user's explicit call, no reason
+  given beyond preferring ZaloPay over 9Pay. Not yet reflected in tech-spec.md/CLAUDE.md's 9Pay
+  references (env var names, `app/api/webhooks/9pay/` path, etc.) — deliberately left as-is until
+  Sprint 3 begins, since the exact ZaloPay merchant contract (S3-T1's job) isn't known yet and a
+  premature rename would just be churn.
+- 2026-08-24 · Interim mock payment step added ahead of Sprint 3, deliberately left ungated (works
+  in production, not just dev) · user's explicit choice after being warned this means anyone who can
+  reach the live bidtop.vn can rank up without paying — accepted as a temporary, pre-launch-only
+  risk. Must be deleted (`app/api/payments/mock-confirm/`, the auto-fire in
+  `app/submit/pending/pending-confirm.tsx`) once Sprint 3's real ZaloPay webhook lands — see
+  Blockers.
+- 2026-08-23 · **Superseded above** — Payment gateway = 9Pay (not VNPay/Momo/ZaloPay/Stripe) · team
+  already has a working integration on ContentSuper.com.
 - 2026-08-23 · Guest checkout only (no user accounts) for MVP · matches outbid.lol's model,
   minimizes friction.
 - 2026-08-23 · New listings require manual admin approval before appearing publicly; top-ups on
@@ -183,8 +218,11 @@ reflected back into the spec file. -->
   gracefully falls back to `"other"` without it, and F5's design already treats classifier
   correctness as non-critical since admin corrects it at approval), but should be resolved before
   trusting the suggestion quality in a real demo.
-- 9Pay merchant credentials: new account for BidTop.vn, or reuse ContentSuper.com's? Must resolve
-  before Sprint 3 (see tech-spec.md Open questions).
+- ZaloPay merchant credentials/account not yet set up — must resolve before Sprint 3's S3-T1 (was
+  the 9Pay version of this same open question; moot now per the gateway-switch Decision above).
+- The mock payment step (`app/api/payments/mock-confirm/`) is live in production and always
+  "succeeds" with no real charge — a real free-rank exploit until Sprint 3 replaces it with the
+  ZaloPay webhook. Must not be forgotten before any real launch/marketing push.
 - bidtop.vn domain/trademark availability not yet confirmed — must resolve before Sprint 6.
 - Legal review of "Dịch vụ pháp lý" and "Crypto, Web3 & Investing" categories not started — both
   stay out of the product indefinitely until done (no sprint assigned).

@@ -15,8 +15,9 @@ const bodySchema = z.object({
 
 // Creates (or tops up) a draft listing + a pending bid. Never touches
 // listings.amount directly — that field stays 0 (new) or unchanged (top-up)
-// until the 9Pay webhook confirms payment in Sprint 3 and calls
-// increment_listing_amount(). See CLAUDE.md Safety rules.
+// until a payment confirmation calls increment_listing_amount(). Today that's
+// /api/payments/mock-confirm (temporary, see its file comment); the real ZaloPay
+// IPN webhook replaces it in Sprint 3. See CLAUDE.md Safety rules.
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
       delta_amount: deltaAmount,
       vat_amount: vatAmount,
       total_charged: deltaAmount + vatAmount,
-      // Real 9Pay order id lands in Sprint 3 — this is a stub so the row can
+      // Real ZaloPay order id lands in Sprint 3 — this is a stub so the row can
       // exist before checkout integration is built.
       gateway_order_id: `pending-${randomUUID()}`,
       status: "pending",

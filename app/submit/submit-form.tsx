@@ -91,7 +91,7 @@ export function SubmitForm({
         setSubmitting(false);
         return;
       }
-      router.push(`/submit/pending?listing=${data.listingId}`);
+      router.push(`/submit/pending?listing=${data.listingId}&bid=${data.bidId}`);
     } catch {
       setSubmitError("Không gửi được listing, thử lại.");
       setSubmitting(false);
