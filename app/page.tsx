@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { supabase } from "@/lib/supabase/server";
 
 // Cached, revalidated every 30s rather than fully static or fully dynamic —
@@ -19,7 +20,15 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
-      <h1 className="text-2xl font-bold text-neutral-900">BidTop.vn</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-neutral-900">BidTop.vn</h1>
+        <Link
+          href="/submit"
+          className="rounded bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-700"
+        >
+          Đăng listing
+        </Link>
+      </div>
       {listings.length === 0 ? (
         <p className="mt-4 text-neutral-500">
           Chưa có listing nào được duyệt. Rank là số tiền đã trả — không gì khác.
