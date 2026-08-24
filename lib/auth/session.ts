@@ -39,6 +39,21 @@ export function verifySessionToken(token: string | undefined): SessionPayload | 
   } catch {
     return null;
   }
-  if (typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
+  // Shape-check every field, not just exp — a cookie signed under an older
+  // payload shape (e.g. missing a field added later) is a valid signature
+  // over stale data, not a valid session. Treat it as malformed, same as a
+  // tampered token, so callers redirect to login instead of crashing on a
+  // missing field.
+  if (
+    typeof payload.adminId !== "string" ||
+    !payload.adminId ||
+    typeof payload.email !== "string" ||
+    !payload.email ||
+    (payload.role !== "admin" && payload.role !== "super_admin") ||
+    typeof payload.exp !== "number" ||
+    payload.exp < Date.now()
+  ) {
+    return null;
+  }
   return payload;
 }
