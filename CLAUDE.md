@@ -85,10 +85,16 @@ ceremony.
 ## Repository layout
 ```
 app/
-  page.tsx                    # homepage leaderboard (walking skeleton — S1-T6)
-  layout.tsx                  # mounts sonner's <Toaster />
+  layout.tsx                  # root layout — mounts sonner's <Toaster />
   globals.css                 # Tailwind v4 directives
-  (public)/                   # (planned) category/[slug], categories, rules, about, submit
+  (public)/                   # S5 — all public routes share layout.tsx (header/nav + footer
+                               # with the online counter). Pure route group, URLs unaffected.
+    page.tsx                  # homepage leaderboard — paginated 50/page, "claim this rank",
+                               # activity feed. Dynamic (searchParams-driven), not ISR-cached.
+    submit/                   # moved from bare app/submit/ in S5 — same files, same URLs
+    categories/, category/[slug]/  # S5 — category browsing (F2)
+    rules/, about/            # S5 — static pages (F3); about/ has a real-copy TODO placeholder
+    _components/               # listing-row, leaderboard, activity-feed, online-counter (client)
   admin/(protected)/          # S4 — login-gated: pending queue (/admin), listings management
                                # (/admin/listings — search/filter/edit-category/unpublish),
                                # settings (super_admin)
@@ -96,7 +102,11 @@ app/
   api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject,category,
                                # unpublish,republish}, settings
   api/payments/mock-confirm/  # TEMPORARY stand-in for the ZaloPay webhook, see its file comment
+  api/presence/heartbeat/     # S5 — "N online" heartbeat (F12), self-built, no third-party vendor
   api/webhooks/9pay/          # (planned, S3 — gateway now ZaloPay, see PROGRESS.md Decisions)
+  out/[id]/                   # S5 — outbound click tracking (F14): records a listing_clicks row,
+                               # then redirects to display_url with UTM params. Not under /api/ —
+                               # a clicked <a href> returning a redirect, not a fetch() endpoint.
 lib/
   auth/                       # S4 — password.ts (argon2id), session.ts (signed cookie),
                                # require-admin.ts (server-side role checks for pages/routes)

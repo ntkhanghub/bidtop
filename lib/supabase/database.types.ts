@@ -109,6 +109,18 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["admin_users"]["Insert"]>;
         Relationships: [];
       };
+      online_heartbeats: {
+        Row: { session_id: string; last_seen: string };
+        Insert: { session_id: string; last_seen?: string };
+        Update: Partial<Database["public"]["Tables"]["online_heartbeats"]["Insert"]>;
+        Relationships: [];
+      };
+      listing_clicks: {
+        Row: { id: string; listing_id: string; created_at: string };
+        Insert: { id?: string; listing_id: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["listing_clicks"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

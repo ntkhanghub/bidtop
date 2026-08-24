@@ -3,12 +3,11 @@
 Single source of truth for project status. Every session updates this file after each completed
 task; no session starts work without reading it.
 
-**Current sprint:** Sprint 4 — Admin panel & moderation (done — awaiting user review). Extended
-past F8/F9 with user-requested additions not in the original spec: a left-sidebar redesign,
-listings management (`/admin/listings`), and Resend email notifications — see task log below.
-**Next task:** awaiting user direction — either S3-T1 (real ZaloPay integration, still not started)
-or Sprint 5 (public leaderboard & growth). Sprint 3's real gateway work remains the one thing
-standing between this app and a safe public launch (see Blockers).
+**Current sprint:** Sprint 5 — Public leaderboard & growth features (S5-T1 through T7, T9 done —
+awaiting user review; S5-T8 revenue counter deliberately deferred, see below).
+**Next task:** S5-T8 (revenue counter — build the query but don't surface it on the frontend yet,
+per explicit user instruction) whenever the user wants it, otherwise awaiting direction on Sprint 3
+(real ZaloPay integration, still not started) vs. Sprint 6 (hardening & launch).
 
 ## Sprint status
 
@@ -18,11 +17,51 @@ standing between this app and a safe public launch (see Blockers).
 | 2 | Listing submission & identity normalization | Done | 2026-08-24 | 2026-08-24 |
 | 3 | Payment integration & atomic rank engine | Not started (real gateway deferred; interim mock unblocks Sprint 4) | — | — |
 | 4 | Admin panel & moderation | Done | 2026-08-24 | 2026-08-24 |
-| 5 | Public leaderboard & growth features | Not started | — | — |
+| 5 | Public leaderboard & growth features | S5-T1–T7,T9 done; T8 deferred (see task log) | 2026-08-25 | — |
 | 6 | Hardening & launch | Not started | — | — |
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-25 · Sprint 5 done except S5-T8 (S5-T1 through T7, T9) · Planned via /plan mode: confirmed
+  F2/F3/F11/F12/F13/F14 have no acceptance-criteria section anywhere in feature-spec.md (only the
+  sprint file's own task descriptions specify them), designed the 3 missing data models from
+  scratch, resolved 6 open questions with the user first (route restructuring, online-counter
+  mechanism, click-tracking mechanism, `/about` content timing — plus a detour: user initially
+  wanted the online counter backed by Vemetric.com; verified via their real API docs that they have
+  no purpose-built live-count endpoint (only historical/windowed analytics queries) and would need a
+  new client-side SDK, which also contradicts CLAUDE.md's/tech-spec.md's existing "no third-party
+  analytics vendor" non-goal — reverted to the self-built design, no vendor).
+  **Route restructuring**: `app/page.tsx` and `app/submit/**` moved into `app/(public)/` (pure
+  route-group rename via `git mv`, zero URL changes) so a new shared `app/(public)/layout.tsx`
+  (header/nav + footer) applies to every public page.
+  **S5-T1/T2** (pagination + "claim this rank"): homepage now `.range()`-paginated 50/page —
+  became a dynamic route (searchParams-driven, no longer ISR-static) as an expected/accepted
+  consequence, same as the admin listings page. Every row + an above-#1 slot link to
+  `/submit?amount=X`.
+  **S5-T3** (`/categories`, `/category/[slug]`): category counts via `Promise.all` of 21
+  `{count:"exact", head:true}` queries rather than an unverified PostgREST grouped-aggregate select.
+  **S5-T4** (`/rules`, `/about`): `/rules` fully data-driven from `settings`; `/about` ships with
+  only spec-derivable mechanic copy — company narrative is an explicit TODO placeholder, not
+  fabricated, per explicit user instruction.
+  **S5-T5** (top-up UI): confirmed F10's backend was already fully correct from Sprint 2 — this
+  task was just the route move + one copy line acknowledging the top-up flow; no new backend logic,
+  no redundant "this is your listing" link (impossible to know pre-lookup with no accounts).
+  **S5-T6** (activity feed): last 15 confirmed bids joined to listings, homepage only.
+  **S5-T7** ("N online"): new `online_heartbeats` table (additive migration), 15s client ping /
+  45s online window, self-built — no vendor.
+  **S5-T9** (click tracking): new `listing_clicks` table (additive migration, no PII), every public
+  listing link now routes through `app/out/[id]/route.ts` (records the click, then redirects with
+  UTM params) instead of linking straight to `display_url`; admin's own listings-page link
+  deliberately left untouched (internal review tool, not a public tracked click).
+  **S5-T8 (revenue counter) explicitly NOT built this round** — user instruction: don't surface
+  total revenue on the frontend in this phase. No query, no component, no footer wiring for it yet.
+  Verified live against the real Supabase DB: seeded 55 test listings to confirm exact 50/50/8
+  page-1/page-2 pagination boundaries and fixed ordering, then cleaned up; category filtering and
+  21-category counts; `/rules` reflecting live settings; the `/out/[id]` redirect (valid → correct
+  UTM redirect + exactly one `listing_clicks` row; invalid uuid and non-approved/nonexistent id →
+  safe redirect home, zero rows); online counter live (heartbeat POSTs succeeding, count reflected
+  in the footer); `/submit`, `/submit/pending`, and all of `/admin/**` unaffected by the route move.
+  Lint/typecheck/`npm test`(14/14)/`npm run build` all pass.
 - 2026-08-24 · Admin listings management + Resend email notifications (not sprint tasks — user
   request; confirmed via feature-spec.md/tech-spec.md/all sprint files that neither was previously
   specified anywhere, planned via /plan mode with 4 clarifying questions resolved first) ·
@@ -185,6 +224,15 @@ standing between this app and a safe public launch (see Blockers).
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
+- 2026-08-25 · "N online" (F12) stays self-built (Postgres heartbeat table), no third-party vendor
+  · user initially wanted Vemetric.com; verified via their real API docs that they have no
+  purpose-built live-count endpoint (only historical/windowed analytics queries) and integrating
+  would require a new client-side SDK — both facts, plus the existing "no third-party analytics
+  vendor in the MVP" non-goal already in CLAUDE.md/tech-spec.md, made the self-built design the
+  better call. User agreed after being shown the research. No spec-file changes needed.
+- 2026-08-25 · S5-T8 (footer revenue counter) intentionally not built this round · explicit user
+  instruction — don't surface total revenue on the frontend in this phase. Revenue query/component
+  will be a small, self-contained follow-up whenever asked; nothing in this round blocks it.
 - 2026-08-24 · Resend calls go through plain `fetch`, no `resend` npm package · CLAUDE.md: "no new
   dependency for something under ~20 lines" — the send call is one `fetch` to Resend's REST API;
   overridable later without changing call sites if the SDK's typed responses/retries are wanted.
