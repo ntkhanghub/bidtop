@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CATEGORY_SLUGS } from "@/lib/categorize";
 import { checkBannedPattern, resolveUrl } from "@/lib/content-validation";
+import { notifyNewSubmission } from "@/lib/email/notify";
 import { normalizeListingIdentity } from "@/lib/normalize-identity";
 import { supabase } from "@/lib/supabase/server";
 
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
 
   let listingId: string;
   let deltaAmount: number;
+  let isNewListing = false;
 
   if (existing) {
     if (existing.submitter_email.toLowerCase() !== email.toLowerCase()) {
@@ -115,6 +117,7 @@ export async function POST(request: Request) {
     }
     listingId = created.id;
     deltaAmount = amount;
+    isNewListing = true;
   }
 
   const vatAmount = Math.round((deltaAmount * settings.vat_percent) / 100);
@@ -136,6 +139,14 @@ export async function POST(request: Request) {
 
   if (bidError || !bid) {
     return NextResponse.json({ error: "Không tạo được bid." }, { status: 500 });
+  }
+
+  if (isNewListing) {
+    try {
+      await notifyNewSubmission({ displayUrl, submitterEmail: email });
+    } catch (err) {
+      console.error("notifyNewSubmission failed:", err);
+    }
   }
 
   return NextResponse.json({ listingId, bidId: bid.id });

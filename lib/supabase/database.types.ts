@@ -3,7 +3,8 @@ export type ListingStatus =
   | "pending_payment"
   | "paid_pending_review"
   | "approved"
-  | "rejected";
+  | "rejected"
+  | "unpublished";
 export type BidStatus = "pending" | "confirmed" | "failed";
 export type AdminRole = "admin" | "super_admin";
 
@@ -35,6 +36,8 @@ export interface Database {
           rejection_reason: string | null;
           reviewed_by: string | null;
           reviewed_at: string | null;
+          unpublished_by: string | null;
+          unpublished_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -50,6 +53,8 @@ export interface Database {
           rejection_reason?: string | null;
           reviewed_by?: string | null;
           reviewed_at?: string | null;
+          unpublished_by?: string | null;
+          unpublished_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["listings"]["Insert"]>;
         Relationships: [];

@@ -3,9 +3,9 @@
 Single source of truth for project status. Every session updates this file after each completed
 task; no session starts work without reading it.
 
-**Current sprint:** Sprint 4 — Admin panel & moderation (done — awaiting user review). Built ahead
-of Sprint 3's real payment gateway, using the interim mock-payment step (see task log below) to
-satisfy Sprint 4's dependency on real `paid_pending_review` rows.
+**Current sprint:** Sprint 4 — Admin panel & moderation (done — awaiting user review). Extended
+past F8/F9 with user-requested additions not in the original spec: a left-sidebar redesign,
+listings management (`/admin/listings`), and Resend email notifications — see task log below.
 **Next task:** awaiting user direction — either S3-T1 (real ZaloPay integration, still not started)
 or Sprint 5 (public leaderboard & growth). Sprint 3's real gateway work remains the one thing
 standing between this app and a safe public launch (see Blockers).
@@ -23,6 +23,30 @@ standing between this app and a safe public launch (see Blockers).
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-24 · Admin listings management + Resend email notifications (not sprint tasks — user
+  request; confirmed via feature-spec.md/tech-spec.md/all sprint files that neither was previously
+  specified anywhere, planned via /plan mode with 4 clarifying questions resolved first) ·
+  **Listings management** (`/admin/listings`): search (URL/identity/email, one box via `.or()`
+  ILIKE), filter (category, status: approved/rejected/unpublished), pagination (20/page), edit
+  category, unpublish/republish — everything except brand-new-listing creation, which stays
+  payment-gated by design (confirmed with user). New `unpublished` status
+  (`supabase/migrations/20260824_listings_unpublish.sql`, additive, applied to production with
+  user confirmation) plus its own `unpublished_by`/`unpublished_at` columns, deliberately separate
+  from `reviewed_by`/`reviewed_at` so an unpublish action never overwrites the original
+  approve/reject audit record; republish clears them back to `null` rather than keeping history
+  (see Decisions). New routes `app/api/admin/listings/[id]/{category,unpublish,republish}`, same
+  `requireAdminApi("admin")` + status-guarded-`.update()` pattern as existing approve/reject.
+  **Resend notifications** (`lib/email/notify.ts`, plain `fetch`, no SDK — see Decisions): fires at
+  both submit-time (brand-new listings only, never top-ups) and payment-confirm-time (when a
+  listing reaches `paid_pending_review`), to one fixed address via 3 new env vars
+  (`RESEND_API_KEY`/`ADMIN_NOTIFICATION_EMAIL`/`RESEND_FROM_EMAIL`) — all silently no-op if unset,
+  and every call site wraps the send in try/catch so a Resend failure can never block a submission
+  or payment confirmation (verified live: both routes still return 200 with correct DB state with
+  the env vars unset, only a `console.error`). Verified live end-to-end against the real Supabase
+  DB: category edit persists without touching `amount`/`status`; unpublish removes a listing from
+  the public homepage immediately, republish restores it and clears the unpublish columns;
+  search/filter/status-switch all correct. Test rows cleaned up afterward. Lint/typecheck/
+  `npm test`(14/14)/`npm run build` all pass.
 - 2026-08-24 · Admin UI: top-nav → left sidebar (not a sprint task — user asked after reviewing
   Sprint 4's UI as "too rough") · Mocked with the `design` skill first, approved, then implemented:
   `app/admin/(protected)/sidebar-nav.tsx` (brand + nav, active-state via `usePathname`) and
@@ -161,6 +185,14 @@ standing between this app and a safe public launch (see Blockers).
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
+- 2026-08-24 · Resend calls go through plain `fetch`, no `resend` npm package · CLAUDE.md: "no new
+  dependency for something under ~20 lines" — the send call is one `fetch` to Resend's REST API;
+  overridable later without changing call sites if the SDK's typed responses/retries are wanted.
+- 2026-08-24 · Republishing an unpublished listing clears `unpublished_by`/`unpublished_at` back to
+  `null` rather than keeping them as history · `reviewed_by`/`reviewed_at` already own the
+  permanent audit record (per S4-T4's "most recent review only" call below); a currently-`approved`
+  row showing a stale "unpublished by X" would be confusing. A full audit trail, if ever wanted,
+  needs a real log table.
 - 2026-08-24 · Admin sessions are a stateless HMAC-signed httpOnly cookie, no `admin_sessions`
   table · tech-spec only said "session cookie", didn't specify storage; matches "small, fixed set
   of admin accounts, no managed auth provider" already decided. Trade-off: no way to force-revoke a

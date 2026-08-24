@@ -89,14 +89,20 @@ app/
   layout.tsx                  # mounts sonner's <Toaster />
   globals.css                 # Tailwind v4 directives
   (public)/                   # (planned) category/[slug], categories, rules, about, submit
-  admin/(protected)/          # S4 — login-gated: pending queue (/admin), settings (super_admin)
+  admin/(protected)/          # S4 — login-gated: pending queue (/admin), listings management
+                               # (/admin/listings — search/filter/edit-category/unpublish),
+                               # settings (super_admin)
   admin/login/                # S4 — public login page
-  api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject}, settings
+  api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject,category,
+                               # unpublish,republish}, settings
   api/payments/mock-confirm/  # TEMPORARY stand-in for the ZaloPay webhook, see its file comment
   api/webhooks/9pay/          # (planned, S3 — gateway now ZaloPay, see PROGRESS.md Decisions)
 lib/
   auth/                       # S4 — password.ts (argon2id), session.ts (signed cookie),
                                # require-admin.ts (server-side role checks for pages/routes)
+  email/
+    notify.ts                 # best-effort admin notifications via Resend's HTTP API (plain
+                               # fetch, no SDK dependency) — new submission + ready-for-review
   supabase/
     server.ts                 # service_role client (server-only, RLS bypassed)
     server.test.ts
@@ -162,8 +168,10 @@ PROGRESS.md
   `DATABASE_URL`/`DIRECT_URL` — dev-tooling-only direct Postgres connection for
   `scripts/apply-migration.mjs`; `ANTHROPIC_API_KEY`; `NINE_PAY_MERCHANT_KEY`,
   `NINE_PAY_SECRET_KEY`; `ADMIN_SESSION_SECRET` — signs the admin session cookie, see
-  `lib/auth/session.ts`); keep `.env.example` current and `.env` gitignored. If a secret ever
-  lands in a commit, stop and tell the user — rotating it is their call.
+  `lib/auth/session.ts`; `RESEND_API_KEY`, `ADMIN_NOTIFICATION_EMAIL`, `RESEND_FROM_EMAIL` —
+  admin email notifications, see `lib/email/notify.ts`, all three silently no-op if unset); keep
+  `.env.example` current and `.env` gitignored. If a secret ever lands in a commit, stop and tell
+  the user — rotating it is their call.
 - Ask before anything destructive or hard to reverse: dropping/altering DB tables with data,
   deleting files outside the repo, force-pushing, and anything touching production. Migrations in
   `supabase/migrations/` are additive-only past Sprint 1 — a migration that drops or truncates a

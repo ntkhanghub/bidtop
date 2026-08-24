@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { notifyReadyForReview } from "@/lib/email/notify";
 import { supabase } from "@/lib/supabase/server";
 
 // TEMPORARY — stands in for the real payment gateway (ZaloPay, Sprint 3) so the
@@ -55,6 +56,25 @@ export async function POST(request: Request) {
       gateway_txn_id: `mock-${randomUUID()}`,
     })
     .eq("id", bid.id);
+
+  // Only fires for a genuinely new review-queue entry — a top-up on an
+  // already-approved listing keeps status "approved" per the RPC's own logic,
+  // so it's naturally excluded here. This call must move into the real
+  // ZaloPay webhook once Sprint 3 builds it (this whole file gets deleted then).
+  if (result[0].status === "paid_pending_review") {
+    const { data: listing } = await supabase
+      .from("listings")
+      .select("display_url, submitter_email")
+      .eq("id", bid.listing_id)
+      .single();
+    if (listing) {
+      try {
+        await notifyReadyForReview({ displayUrl: listing.display_url, submitterEmail: listing.submitter_email });
+      } catch (err) {
+        console.error("notifyReadyForReview failed:", err);
+      }
+    }
+  }
 
   return NextResponse.json({ amount: result[0].amount, status: result[0].status });
 }

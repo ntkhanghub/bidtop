@@ -13,6 +13,16 @@ function QueueIcon() {
   );
 }
 
+function ListingsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 6.5L10.3 5.2C11.5 4 13.4 4 14.6 5.2C15.8 6.4 15.8 8.3 14.6 9.5L13.3 10.8" />
+      <path d="M11 13.5L9.7 14.8C8.5 16 6.6 16 5.4 14.8C4.2 13.6 4.2 11.7 5.4 10.5L6.7 9.2" />
+      <path d="M8.5 11.5L11.5 8.5" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -31,6 +41,7 @@ export function SidebarNav({ showSettings }: { showSettings: boolean }) {
 
   const items = [
     { href: "/admin", label: "Hàng chờ duyệt", icon: <QueueIcon /> },
+    { href: "/admin/listings", label: "Quản lý link", icon: <ListingsIcon /> },
     ...(showSettings
       ? [{ href: "/admin/settings", label: "Cài đặt", icon: <SettingsIcon />, badge: "Super admin" }]
       : []),
