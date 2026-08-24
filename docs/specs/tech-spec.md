@@ -2,12 +2,16 @@
 
 ## Overview
 
-BidTop.vn is a server-rendered Next.js monolith backed by PostgreSQL — no microservices, no
-message queue, no user-auth system on the public side. The entire product is one core write
-operation (`amount = amount + delta`, applied only from a verified payment webhook) and one core
-read operation (leaderboard `ORDER BY amount DESC, first_confirmed_at ASC`, filtered to
-`status = approved`). Everything else — submission form, AI categorization, admin moderation,
-settings — exists to feed that write safely or to serve that read attractively.
+BidTop.vn is a server-rendered Next.js monolith backed by PostgreSQL (Supabase) — no
+microservices, no message queue, no user-auth system on the public side. The entire product is one
+core write operation (a single atomic `UPDATE` inside a Postgres RPC function, called only from a
+verified payment webhook) and one core read operation (leaderboard
+`ORDER BY amount DESC, first_confirmed_at ASC`, filtered to `status = approved`). Everything else —
+submission form, AI categorization, admin moderation, settings — exists to feed that write safely
+or to serve that read attractively.
+
+Data access goes through `@supabase/supabase-js` (server-only, `SUPABASE_SERVICE_ROLE_KEY`) rather
+than an ORM — see Assumptions for why this changed mid-project from an initial Prisma-based design.
 
 ## Stack
 
@@ -17,7 +21,7 @@ settings — exists to feed that write safely or to serve that read attractively
 | Styling | Tailwind CSS v4 | fast to build/iterate with, no separate CSS files to maintain, pairs naturally with the App Router; v4's CSS-first config means no `tailwind.config.ts` unless a future need requires one |
 | Notifications | Toast (sonner) | transient feedback for payment status, admin actions, settings saves — see Conventions in CLAUDE.md for when to use toast vs. inline field errors |
 | Database | PostgreSQL (Supabase, Singapore region) | relational fits the listings/bids ledger; row-level locking on `UPDATE` is what makes the rank engine race-safe for free; Singapore region keeps latency low for VN traffic; managed dashboard/table editor is useful for a solo founder debugging data directly |
-| ORM | Prisma 7 + `@prisma/adapter-pg` | typed queries, migrations; team already comfortable with it from other projects. Prisma 7 requires a driver adapter for the runtime client and moved CLI datasource config out of `schema.prisma` into `prisma.config.ts` — see External integrations below |
+| Data access | `@supabase/supabase-js` (server-only, service role) + hand-written raw SQL migrations in `supabase/migrations/` | user's explicit choice over an ORM. Schema is managed as plain SQL, applied via a small local script (`scripts/apply-migration.mjs`) against the direct connection — not the Supabase CLI, which would need an interactive login this team can't do headlessly. Row types are hand-written (`lib/supabase/database.types.ts`) rather than CLI-generated, for the same reason |
 | Payment | 9Pay | already integrated on ContentSuper.com (existing team experience); IPN webhook + checksum model fits the "rank only after webhook" requirement |
 | Hosting | Vercel | zero-ops for a solo/small team; serverless functions handle the webhook endpoint fine at this traffic scale |
 | Category classification | LLM call (Claude Haiku) at submission time | cheap, no training data needed; accuracy is not launch-critical because admin corrects it at approval (F8) |
@@ -26,7 +30,7 @@ settings — exists to feed that write safely or to serve that read attractively
 ## Architecture
 
 ```
-Visitor ──GET──▶ / , /category/[slug]  ──▶ Next.js SSR/ISR ──▶ Supabase Postgres (read-only, cached)
+Visitor ──GET──▶ / , /category/[slug]  ──▶ Next.js SSR/ISR ──▶ supabase-js (service role, RLS bypassed)
                                                                      │
 Submitter ─POST─▶ /submit ──▶ normalize + validate ──▶ draft listing + pending bid row
                                     │                              │
@@ -38,12 +42,17 @@ Submitter ─POST─▶ /submit ──▶ normalize + validate ──▶ draft l
                                                             │
                                               verify checksum + idempotency
                                                             │
-                                          DB transaction: amount = amount + delta
+                              supabase.rpc('increment_listing_amount', ...)
+                              — single atomic UPDATE inside the Postgres function
                                                             │
                               new listing → status=paid_pending_review (F8 queue)
                               top-up on approved listing → status stays approved, re-sorts now
                                                             │
 Admin ──▶ /admin (session auth) ──▶ approve/reject queue, settings (super_admin only)
+
+(No browser ever holds a Supabase credential. NEXT_PUBLIC_SUPABASE_ANON_KEY is
+configured but unused — RLS grants it read-only access to categories/approved
+listings/settings and nothing else; nothing in the app calls it client-side yet.)
 ```
 
 No queue, no background worker: webhook volume is low enough that a synchronous transaction inside
@@ -52,8 +61,12 @@ timeouts.
 
 ## Data model
 
+Managed as raw SQL in `supabase/migrations/` (not an ORM schema) — `id` columns are Postgres
+`uuid default gen_random_uuid()`, not application-generated IDs.
+
 - **`categories`** — `id`, `slug`, `name_vi`, `sort_order`. Seeded with the 21 launch categories
-  (Sprint 1, see S1-T5 in `docs/sprints/sprint-01-foundation.md` for the authoritative list).
+  (Sprint 1, see S1-T5 in `docs/sprints/sprint-01-foundation.md` for the authoritative list;
+  `supabase/seed.sql` is the actual applied source).
 - **`listings`** — `id`, `identity_key` (unique, normalized domain+path or @handle),
   `display_url`, `category_id` (FK), `status` (`draft` | `pending_payment` |
   `paid_pending_review` | `approved` | `rejected`), `amount` (integer, VNĐ, starts at 0),
@@ -81,12 +94,18 @@ is excluded from analytics events and logs.
   `ANTHROPIC_API_KEY`. Submitted content is untrusted input — never interpolate raw scraped page
   content into a system prompt with instructions in it.
 - **Supabase Postgres** — primary datastore (only its Postgres product is used — Supabase Auth,
-  Storage, and Realtime are explicitly not part of this stack). Two connection strings, wired in
-  two different places (Prisma 7 no longer supports `url`/`directUrl` in `schema.prisma`):
-  `DATABASE_URL` (pooled, port 6543) is read by the runtime `PrismaClient`'s `@prisma/adapter-pg`
-  driver adapter (`lib/db.ts`); `DIRECT_URL` (direct, port 5432) is read by `prisma.config.ts` and
-  used only by the Prisma CLI (`migrate`, `db seed`, `studio`). Both are required because
-  Supabase's pooler doesn't support the session-level features Prisma Migrate needs.
+  Storage, and Realtime are explicitly not part of this stack). Two separate credential sets, for
+  two separate purposes:
+  - **App runtime** (`lib/supabase/server.ts`): `NEXT_PUBLIC_SUPABASE_URL` +
+    `SUPABASE_SERVICE_ROLE_KEY`, via `@supabase/supabase-js`. Server-only; the service role
+    bypasses RLS entirely, so this is the same trust boundary as a direct superuser connection
+    would be — it just never leaves our own server code. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is also
+    configured (browser-safe by design) but nothing calls it yet — see Assumptions.
+  - **Dev tooling only** (`scripts/apply-migration.mjs`, via the `pg` package):
+    `DATABASE_URL`/`DIRECT_URL`, a direct Postgres connection under the dedicated `prisma`-named
+    DB role (kept from the earlier Prisma setup — the name is legacy, the role itself is still the
+    right least-privilege choice). Applies the raw SQL in `supabase/migrations/` and
+    `supabase/seed.sql`. Not used by the running app at all.
 
 ## Non-functional requirements
 
@@ -102,9 +121,21 @@ is excluded from analytics events and logs.
 ## Security considerations
 
 - **Rank integrity is the core threat model.** Only the 9Pay IPN webhook handler, after checksum
-  verification, may write to `listings.amount` or `first_confirmed_at`. No other code path —
-  including the submit form, the `return_url` redirect handler, or any admin action — is permitted
-  to touch these fields directly.
+  verification, may call the `increment_listing_amount()` Postgres function — the only code path
+  permitted to write `listings.amount` or `first_confirmed_at`. No other code path — including the
+  submit form, the `return_url` redirect handler, or any admin action — is permitted to touch these
+  fields directly, and the function itself has `EXECUTE` revoked from `anon`/`authenticated` (only
+  reachable via `service_role`, i.e. only from our own server code). Verified for real: a script
+  fired 8 concurrent RPC calls against one listing and confirmed the final amount was the exact
+  sum of all deltas — no lost update (see `scripts/verify-atomic-increment.mjs`).
+- **RLS is the second layer, not the only layer.** Every table has Row Level Security enabled.
+  `anon`/`authenticated` get exactly three read-only policies: `categories` (all rows), `listings`
+  (only `status = 'approved'`), `settings` (all rows) — needed for public pages and the submit
+  form's minimum-price display. `bids` and `admin_users` have zero policies — no public access to
+  either, under any key. All actual app traffic uses `service_role` server-side, which bypasses
+  RLS entirely — so RLS mainly protects against a future mistake (e.g. someone shipping
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` into a client component) rather than being load-bearing for the
+  app's normal operation today.
 - **Idempotency:** `bids.gateway_order_id` is a unique constraint; the webhook handler checks
   existing `bids.status` before applying the amount increment, so a retried webhook delivery is a
   safe no-op.
@@ -121,6 +152,10 @@ is excluded from analytics events and logs.
   checkout/payment-link flow only. Webhook checksum is mandatory, not optional-with-fallback.
 - **PII:** `submitter_email` is the only PII field; excluded from logs, analytics events, and any
   public rendering.
+- **`SUPABASE_SERVICE_ROLE_KEY` never reaches the browser.** It's read only in
+  `lib/supabase/server.ts`, which must never be imported into a `"use client"` component (Next.js
+  would fail to bundle it for the browser anyway, since it needs Node APIs, but the rule is
+  enforced by discipline, not just tooling — see CLAUDE.md Safety rules).
 
 ## Assumptions
 
@@ -130,6 +165,19 @@ is excluded from analytics events and logs.
 - **Toast library** (sonner) was not named by the user beyond "Toast Notification" — chosen as a
   lightweight, App-Router-friendly default. Swap freely before Sprint 1 if the team prefers
   another (e.g. react-hot-toast) — this is a low-cost, low-risk substitution.
+- **Data access layer switched from Prisma to `@supabase/supabase-js` after Sprint 1 was already
+  built and verified against a live DB.** User's explicit choice, made after weighing it against
+  Prisma directly (see PROGRESS.md Decisions for the full comparison). Consequences worth knowing
+  for later sprints: no ORM migrations (raw SQL in `supabase/migrations/`, applied by
+  `scripts/apply-migration.mjs`, which is NOT safe to blindly re-run — see CLAUDE.md); no
+  CLI-generated types (`lib/supabase/database.types.ts` is hand-written and must be kept in sync
+  with the SQL by hand); the atomic rank-engine write is a Postgres RPC function
+  (`increment_listing_amount`) instead of an ORM `increment()` call.
+- **`NEXT_PUBLIC_SUPABASE_ANON_KEY` is configured but not yet used by any code.** All current data
+  access (including the public homepage) goes through `service_role` server-side. The anon key +
+  its 3 read-only RLS policies exist for a future client-side use case (e.g. Realtime) that hasn't
+  been designed yet — don't wire up client-side Supabase calls without deciding what RLS policies
+  that specific feature needs first.
 - **Team/timeline:** solo founder or very small team running Claude Code sessions; no fixed launch
   date was given, so the sprint plan is sequenced by dependency, not calendar. If there is a real
   deadline, compress by cutting Sprint 5 features to backlog, not by adding parallel work.

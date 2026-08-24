@@ -43,17 +43,23 @@ not change any row.
 
 ### S3-T4 — IPN webhook handler: signature verification + idempotency
 Build `/api/webhooks/9pay`: verify the checksum/signature per S3-T1's findings; look up the `bids`
-row by `gateway_order_id`; if already `confirmed`, return success without reprocessing; otherwise
-proceed to S3-T5's transaction.
+row by `gateway_order_id` (via `lib/supabase/server.ts`, `service_role`); if already `confirmed`,
+return success without reprocessing; otherwise proceed to S3-T5.
 **Acceptance:** a request with a tampered/invalid checksum is rejected and no DB write occurs; a
 valid webhook replayed twice results in exactly one amount increment, confirmed by a test that
 posts the same payload twice.
 
 ### S3-T5 — Atomic amount update + status transition
-Inside a single DB transaction: `UPDATE listings SET amount = amount + :delta WHERE id = :id`;
-mark the bid `confirmed`; if this is the listing's first-ever confirmed bid, set
-`first_confirmed_at = now()` and `status = 'paid_pending_review'`; if the listing was already
-`approved`, leave `status = 'approved'` (top-up applies immediately, no re-review).
+The atomic piece already exists: `increment_listing_amount(p_listing_id, p_delta)` (built and
+verified in S1-T4 — see `supabase/migrations/20260823_init.sql`) does the single-statement
+`UPDATE`, setting `first_confirmed_at` once via `coalesce` and transitioning `status` to
+`paid_pending_review` (new listing) or leaving it `approved` (top-up). This task wires the webhook
+handler to call it via `supabase.rpc('increment_listing_amount', ...)` and marks the `bids` row
+`confirmed`. **Decide here:** these are two separate calls through `supabase-js` (no client-side
+multi-statement transaction like Prisma's `$transaction`) — evaluate whether to extend the RPC
+function to also update the `bids` row in the same Postgres function call (genuinely atomic, one
+round trip) rather than leaving a window between "bid confirmed" and "amount incremented" that a
+crashed request could get stuck between.
 **Acceptance:** a test that fires two confirmations for two different bids on the *same* listing
 concurrently (e.g. parallel requests) results in a final `amount` equal to the sum of both deltas
 — no lost update; a test confirms `first_confirmed_at` is set on the first confirmation and

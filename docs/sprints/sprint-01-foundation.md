@@ -18,6 +18,12 @@ homepage, and see it query a real (empty) `listings` table in Supabase Postgres 
 
 ## Tasks
 
+**Note:** S1-T3 through S1-T7 below were originally written and first executed against a
+Prisma-based data layer. Partway through Sprint 1, the user chose to switch to
+`@supabase/supabase-js` + raw SQL instead (see PROGRESS.md Decisions for the full reasoning) — the
+task descriptions and acceptance criteria below reflect the current, actually-built architecture,
+not the original Prisma-based plan.
+
 ### S1-T1 — Scaffold Next.js + TypeScript project
 Initialize the repo: Next.js (App Router), TypeScript, ESLint, Prettier, a test runner (Vitest),
 Tailwind CSS, and sonner (toast) with its `<Toaster />` mounted in the root layout. `git init` and
@@ -34,37 +40,40 @@ Replace the placeholder commands in `CLAUDE.md` with the real ones from this sca
 **Acceptance:** every command listed in CLAUDE.md's Commands section has been run at least once
 and does what it claims.
 
-### S1-T3 — Provision Supabase Postgres + Prisma
-Create a Supabase project. Create a dedicated `prisma` DB role (not the default `postgres`
-superuser) per Supabase's official Prisma guide — least privilege, and it's granted `bypassrls`
-explicitly so "Automatic RLS" on new tables never blocks Prisma. Get the pooled connection string
-(port 6543) and the direct connection string (port 5432, via the pooler host in session mode, not
-`db.[ref].supabase.co` — the latter can have IPv6-only issues from some serverless platforms).
-Prisma 7 doesn't support `url`/`directUrl` in `schema.prisma` — wiring is split: `DIRECT_URL` goes
-into `prisma.config.ts`'s `datasource.url` (used by the CLI: migrate, seed, studio), and
-`DATABASE_URL` (pooled) is read by `lib/db.ts`'s `@prisma/adapter-pg` driver adapter at runtime.
-**Acceptance:** `npx prisma migrate dev` runs cleanly against Supabase via `DIRECT_URL`; a runtime
-query against the pooled `DATABASE_URL` succeeds from a local script.
+### S1-T3 — Provision Supabase Postgres
+Create a Supabase project. Create a dedicated `prisma`-named DB role (kept from the earlier
+Prisma-based setup — the name is legacy, but "least privilege, not the default `postgres`
+superuser" is still the right call) for dev tooling. Get the pooled connection string (port 6543)
+and the direct connection string (port 5432) — the latter used only by
+`scripts/apply-migration.mjs`, not by the app itself. Get the project's `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` from Settings → API for the app
+runtime (`lib/supabase/server.ts`).
+**Acceptance:** applying a migration via `scripts/apply-migration.mjs` succeeds against
+`DIRECT_URL`; a runtime query via `@supabase/supabase-js` (`service_role`) succeeds from the app.
 **Result:** Done. Initially provisioned in `ap-northeast-2` (Seoul), then recreated by the user in
 `ap-southeast-1` (Singapore, project ref `fugvcufgrpnnanqxmvrs`) to match tech-spec's original
-latency reasoning — re-verified clean on the new project. Gotcha hit twice: Supabase's pooler
-hostname needs a cluster prefix (bare `[region].pooler.supabase.com` doesn't resolve, NXDOMAIN),
-and the prefix isn't always `aws-0-` — the Singapore project had both `aws-0-` and `aws-1-`
-clusters resolve via DNS; `aws-0-` was the one that actually worked, confirmed by connecting, not
-assumed. `.env.example` corrected to flag this.
+latency reasoning. Gotcha hit twice: Supabase's pooler hostname needs a cluster prefix (bare
+`[region].pooler.supabase.com` doesn't resolve, NXDOMAIN), and the prefix isn't always `aws-0-` —
+the Singapore project had both `aws-0-` and `aws-1-` clusters resolve via DNS; `aws-0-` was the one
+that actually worked, confirmed by connecting, not assumed. `.env.example` corrected to flag this.
 
 ### S1-T4 — Core data model migration
-Create `categories`, `listings`, `bids`, `settings`, `admin_users` tables per
-`docs/specs/tech-spec.md`'s Data model section — exact fields, types, constraints
-(`identity_key` unique, `gateway_order_id` unique, enums for `status`/`role`).
-**Acceptance:** migration runs cleanly on a fresh DB; Prisma Client generates without errors; a
-unit test confirms the unique constraints reject duplicate `identity_key` and duplicate
-`gateway_order_id`.
-**Result:** Migration `20260823073758_init` applied cleanly to the real Supabase DB. Unique
-constraints defined in schema (`@unique` on `identityKey` and `gatewayOrderId`); a dedicated DB
-test for constraint-violation behavior is still open — not launch-blocking since Prisma enforces
-this via the DB schema itself, not application code, but worth a real test in Sprint 2 once
-listings actually get created.
+Create `categories`, `listings`, `bids`, `settings`, `admin_users` tables (raw SQL,
+`supabase/migrations/`) per `docs/specs/tech-spec.md`'s Data model section — exact fields, types,
+constraints (`identity_key` unique, `gateway_order_id` unique, enums for `status`/`role`), RLS
+enabled on every table with only 3 read-only public policies (`categories`, approved `listings`,
+`settings` — see tech-spec Security considerations), and the `increment_listing_amount()` RPC
+function with `EXECUTE` revoked from `anon`/`authenticated`.
+**Acceptance:** migration runs cleanly on a fresh DB; a unit test confirms the unique constraints
+reject duplicate `identity_key` and duplicate `gateway_order_id`; a script confirms
+`increment_listing_amount()` applies concurrent deltas without a lost update.
+**Result:** Done. `supabase/migrations/20260823_init.sql` applied cleanly. Unique constraints
+enforced at the DB level (`identity_key`, `gateway_order_id`). Atomicity verified for real:
+`scripts/verify-atomic-increment.mjs` fired 8 concurrent RPC calls against one listing — final
+amount was the exact sum of all deltas, `first_confirmed_at` set exactly once. A dedicated test for
+unique-constraint-violation behavior is still open — not launch-blocking since Postgres enforces it
+regardless of caller, but worth a real test in Sprint 2 once the submit flow actually creates
+listings.
 
 ### S1-T5 — Seed script: categories + default settings
 Seed all 21 launch categories and default settings values.
@@ -98,25 +107,31 @@ Default settings: `starting_price = 100000` (VNĐ), `min_increment = 50000` (VN�
 **Acceptance:** running the seed script against a fresh DB inserts exactly 21 rows in
 `categories` with the slugs above, and 3 rows in `settings` with the values above; running it
 twice does not duplicate rows (idempotent seed).
-**Result:** Done. `npx prisma db seed` ran against the real Supabase DB: "Seeded 21 categories and
-3 settings." Re-run idempotency (upsert-based) verified by code inspection, not yet by actually
-running it twice — low risk, cheap to double check before Sprint 6 if it matters.
+**Result:** Done. `supabase/seed.sql` (upsert-based, `on conflict`) applied via
+`node scripts/apply-migration.mjs supabase/seed.sql` (also `npm run db:seed`) against the real
+Supabase DB — verified by querying back: 21 categories, 3 settings with the expected values.
+Re-run idempotency verified by code inspection (upserts), not yet by actually running it twice —
+low risk, cheap to double check before Sprint 6 if it matters.
 
 ### S1-T6 — Walking skeleton: homepage reads live DB
 Build `/` to SSR-render a leaderboard list by querying `listings WHERE status = 'approved' ORDER
-BY amount DESC, first_confirmed_at ASC`, with an explicit empty state (no listings yet).
+BY amount DESC, first_confirmed_at ASC` via `lib/supabase/server.ts`, with an explicit empty state
+(no listings yet).
 **Acceptance:** loading `/` locally and on the Vercel preview shows the empty-state UI, and the
-query is visibly hitting Postgres (confirmed via Prisma logs or a temporary seeded test row that
-renders correctly then is removed).
-**Result:** Done locally — verified live in-browser (`http://localhost:3000`), page text confirms
-the real empty-state copy sourced from the DB query (zero `approved` listings, as expected: only
-categories/settings are seeded, no listings yet). `npm run build` succeeds against the real DB,
-ISR `revalidate: 30s` confirmed in the build output route table. Vercel preview verification is
-S1-T7's job, still pending.
+query is visibly hitting Postgres (confirmed via a temporary seeded test row that renders correctly
+then is removed, or by inspecting Supabase's logs).
+**Result:** Verified once against the Prisma-based implementation (live in-browser empty state,
+`npm run build` succeeding with ISR `revalidate: 30s` in the route table). Re-implemented against
+`@supabase/supabase-js` after the data-layer switch — code is typechecked/linted clean, but
+re-verification against a live DB (need `NEXT_PUBLIC_SUPABASE_URL` /
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` from the user) is pending. Vercel
+preview verification is S1-T7's job, still pending regardless.
 
 ### S1-T7 — Deploy pipeline to Vercel
-Connect the repo to Vercel, wire `DATABASE_URL` and `DIRECT_URL` as environment variables, confirm
-a push to main triggers a working deploy.
+Connect the repo to Vercel, wire `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY` as environment variables (not `DATABASE_URL`/`DIRECT_URL` — those are
+dev-tooling-only and never needed by the deployed app), confirm a push to main triggers a working
+deploy.
 **Acceptance:** the Vercel production URL serves the same homepage as local dev, reading from the
 same Supabase database.
 
@@ -124,10 +139,9 @@ same Supabase database.
 None — this is the first sprint.
 
 ## Risks
-- Supabase's connection pooler under Vercel's serverless functions can exhaust connections or
-  reject Prisma Migrate if the wrong connection string is used for the wrong purpose — always use
-  the pooled `DATABASE_URL` for app queries and the direct `DIRECT_URL` for migrations (S1-T3),
-  never the reverse.
+- `scripts/apply-migration.mjs` applies raw SQL with no migration-tracking table — it's on the
+  person/session running it to know which files have already been applied. Fine at Sprint 1 scale
+  (one init migration); revisit if this becomes error-prone once Sprint 2+ adds more migrations.
 
 ## Definition of Done
 - [ ] All tasks meet their acceptance criteria

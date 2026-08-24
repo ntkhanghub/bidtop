@@ -4,8 +4,7 @@ Single source of truth for project status. Every session updates this file after
 task; no session starts work without reading it.
 
 **Current sprint:** Sprint 1 — Foundation
-**Next task:** S1-T7 (Vercel deploy — blocked, needs Vercel account access; S1-T1 through S1-T6
-are done)
+**Next task:** S1-T7 — Vercel deploy (blocked — needs Vercel account access)
 
 ## Sprint status
 
@@ -20,6 +19,30 @@ are done)
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-24 · S1-T6 re-verified against supabase-js data layer · Fixed missing GRANT statements in
+  `20260823_init.sql` (tables created by `prisma` role weren't accessible to `service_role` —
+  added `GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role` and `GRANT SELECT ON
+  categories, listings, settings TO anon, authenticated`). Re-applied migration + seed. `npm test`,
+  `npm run build` (ISR revalidate:30s confirmed), `npm run lint`, `npm run typecheck` all pass.
+  Live browser: homepage shows empty-state "Chưa có listing nào được duyệt" from real Supabase DB.
+  Not yet committed.
+- 2026-08-23 · Data layer switched Prisma → `@supabase/supabase-js` (mid-Sprint-1 pivot; see
+  Decisions for the reasoning) · Rebuilt from scratch: `supabase/migrations/20260823_init.sql`
+  (raw SQL — tables, enums, indexes, RLS policies, `increment_listing_amount()` RPC function with
+  `EXECUTE` revoked from anon/authenticated) applied via `scripts/apply-migration.mjs`;
+  `supabase/seed.sql` applied via `npm run db:seed`; `lib/supabase/server.ts` (service-role client)
+  + `lib/supabase/database.types.ts` (hand-written `Database` type — hit and fixed a real bug here:
+  postgrest-js's `GenericSchema`/`GenericTable` types require `Views` and `Relationships` keys even
+  when empty, or `.select()` silently infers `never`); `app/page.tsx` rewritten against the new
+  client. Removed `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `pg` (moved to devDependency,
+  now dev-tooling-only), `prisma.config.ts`, `prisma/` entirely. Verified for real, not just
+  typechecked: `scripts/verify-atomic-increment.mjs` fired 8 concurrent RPC calls at one listing
+  and confirmed the final amount was the exact sum of all deltas (no lost update) — the single most
+  important correctness property in the whole system. `npm run lint`/`typecheck` clean.
+  `npm test`/`npm run build`/live-browser homepage check still pending — need
+  `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` from the
+  user (`DATABASE_URL`/`DIRECT_URL` alone, which we have, aren't enough — those only feed the dev
+  migration script now, not the app). Not yet committed.
 - 2026-08-23 · S1-T3 re-verified on the Singapore project · user recreated the Supabase project in
   `ap-southeast-1` (project ref `fugvcufgrpnnanqxmvrs`, replacing the Seoul one). Same pooler
   hostname gotcha hit again, this time with two candidate clusters (`aws-0-` and `aws-1-` both
@@ -63,8 +86,8 @@ reflected back into the spec file. -->
   `docs/sprints/sprint-01-foundation.md` S1-T5) · corrected from an initial "19" mislabel during
   kickoff — the itemized list the user approved actually totals 21.
 - 2026-08-23 · Database = Supabase Postgres (not Neon) · user's explicit choice; only its Postgres
-  product is used, not Auth/Storage/Realtime. Requires both `DATABASE_URL` (pooled) and
-  `DIRECT_URL` (direct) env vars for Prisma to work correctly (see S1-T3).
+  product is used, not Auth/Storage/Realtime. Still true after the later Prisma → supabase-js
+  switch below — this decision was about the *database*, not the client library.
 - 2026-08-23 · Styling = Tailwind CSS, transient feedback = toast notifications (sonner chosen as
   the default library, swappable) · user's explicit choice.
 - 2026-08-23 · "Claim this rank for X" pricing shortcut added (F1, S5-T2) · user shared an
@@ -79,18 +102,19 @@ reflected back into the spec file. -->
   stable" at scaffold time; tech-spec always intended boring/latest, not a hard version pin.
   CLAUDE.md and tech-spec.md updated to match. No `tailwind.config.ts` exists — v4 doesn't need
   one for this project.
-- 2026-08-23 · Prisma 7's schema.prisma no longer accepts `url`/`directUrl` in the datasource
-  block · CLI connection config (`DIRECT_URL`) moved to `prisma.config.ts`; the runtime
-  `PrismaClient` now requires an explicit driver adapter (`@prisma/adapter-pg`, reading
-  `DATABASE_URL`) instantiated in `lib/db.ts`. Both env vars are still needed, just wired in two
-  different files instead of one. tech-spec.md and CLAUDE.md updated to match.
+- 2026-08-23 · **Superseded** — Prisma 7's schema.prisma no longer accepts `url`/`directUrl` in the
+  datasource block · was true and relevant while Prisma was in use (S1-T3 era); moot after the
+  Prisma → supabase-js switch further down this list. Left here only as a record of what was
+  investigated at the time.
 - 2026-08-23 · Homepage (`app/page.tsx`) uses ISR (`revalidate = 30`), not pure static or
   force-dynamic · matches tech-spec's NFR ("leaderboard renders < 1s on the cached path") while
   keeping listings reasonably fresh after a payment. Means `npm run build` needs a real DB
   connection to prerender `/` — expected, not a bug.
-- 2026-08-23 · Supabase DB role = dedicated `prisma` role (not default `postgres` superuser) ·
-  follows Supabase's own official Prisma integration guide (least privilege). Created with
-  `bypassrls` explicitly, so it's unaffected by "Automatic RLS on new tables" either way.
+- 2026-08-23 · Supabase DB role = dedicated `prisma`-named role (not default `postgres`
+  superuser), kept as dev-tooling role after the Prisma → supabase-js switch · originally followed
+  Supabase's official Prisma integration guide (least privilege); the name is now a legacy
+  artifact but the role itself is still correct for `scripts/apply-migration.mjs`'s job. Created
+  with `bypassrls` explicitly, so it's unaffected by "Automatic RLS on new tables" either way.
 - 2026-08-23 · Supabase project recreated in `ap-southeast-1` (Singapore) · resolves the earlier
   Seoul-vs-Singapore open question — user chose to switch. No real data existed yet, so the old
   Seoul project's data was simply abandoned, not migrated.
@@ -101,9 +125,34 @@ reflected back into the spec file. -->
   as distinct clusters; `aws-0` happened to be the correct one for this project, verified by
   actually connecting, not assumed. If a future project's connection fails the same way, check
   both. `.env.example` corrected to flag this explicitly.
+- 2026-08-23 · **Data access layer switched from Prisma to `@supabase/supabase-js`, entirely
+  replacing the ORM** · user's explicit, informed choice — asked directly after Prisma was already
+  built, working, and verified against a live DB in Sprint 1. Before agreeing to touch anything,
+  walked through why the project originally chose direct-Postgres-via-server over
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` + client-side Supabase SDK (the anon-key pattern shifts all
+  enforcement onto RLS policies the browser can reach directly; a direct server-only connection
+  means the browser never holds any DB-reaching credential at all — stronger default for an app
+  with a password-hash table and a payment ledger) — user acknowledged this and asked to switch
+  anyway, then picked the most disruptive of 4 offered scoping options ("replace Prisma entirely")
+  over 3 narrower ones (keep Prisma + add anon key for one feature; server-only Supabase SDK
+  without any anon key/RLS surface at all; do nothing).
+  **What changed:** raw SQL migrations (`supabase/migrations/`) applied by a small local script
+  instead of `prisma migrate`; hand-written TS types instead of Prisma-generated ones; the atomic
+  rank-engine write became a Postgres RPC function (`increment_listing_amount`, `EXECUTE` revoked
+  from anon/authenticated) instead of Prisma's `increment()` inside a `$transaction`; RLS enabled
+  on every table with exactly 3 narrow public read policies (categories, approved listings,
+  settings) — everything else (all writes, `bids`, `admin_users`) has zero policies, reachable only
+  via `service_role` from server code.
+  **What did NOT change:** the security model itself. All app traffic — including the public
+  homepage — still goes through `service_role` server-side; `NEXT_PUBLIC_SUPABASE_ANON_KEY` is
+  configured (as the user asked) but nothing calls it yet, so it grants nothing in practice today.
+  The browser still never holds a credential that reaches the database. RLS exists as a second,
+  currently-mostly-inert layer in case that ever changes by accident, not because the app relies on
+  it today.
 
 ## Blockers & open questions
 <!-- Anything a session had to stop on, waiting for user input. -->
+- **S1-T6 done.** ~~Blocking S1-T6 re-verification right now: need env vars~~ — resolved.
 - Vercel account/project not yet connected — needed for S1-T7. The user's to set up (connecting a
   GitHub repo to Vercel, or `vercel login`), unless they'd rather hand over a `VERCEL_TOKEN` for
   CLI-driven deploys.

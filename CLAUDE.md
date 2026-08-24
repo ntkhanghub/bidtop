@@ -7,9 +7,10 @@ curation, no quality score.
 **Before doing anything else in a session: read `PROGRESS.md`** — it names the current sprint and
 next task. Do not infer project status from the file tree.
 
-Scaffold exists (S1-T1 done); `DATABASE_URL`/`DIRECT_URL` in `.env` are still placeholders — real
-Supabase credentials are required before `npm run build`, `prisma migrate dev`, or `prisma db
-seed` will work for real (see PROGRESS.md Blockers).
+Scaffold exists (Sprint 1 in progress). Data access is `@supabase/supabase-js` against a real
+Supabase project — not Prisma/an ORM, a deliberate mid-project switch (see PROGRESS.md Decisions
+for why). `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`
+in `.env` are needed for the app to run for real; see PROGRESS.md Blockers for current status.
 
 ## Working principles
 Behavioral defaults for every task in this repo — biased toward caution over speed. For trivial
@@ -60,15 +61,18 @@ ceremony.
   project's needs — don't add one speculatively)
 - Toast notifications via sonner — transient feedback (payment status, admin actions, settings
   saved); see Conventions below for when to use it vs. inline field errors
-- PostgreSQL (Supabase, Singapore region) via Prisma 7 + `@prisma/adapter-pg`. Prisma 7 removed
-  `url`/`directUrl` from `schema.prisma`'s datasource block: the CLI (migrate/seed) reads its
-  connection from `prisma.config.ts` (`DIRECT_URL`, direct/non-pooled), while the runtime
-  `PrismaClient` (`lib/db.ts`) is constructed with a `PrismaPg` driver adapter reading
-  `DATABASE_URL` (pooled) — the two are wired independently, not both in one place. Row-level
-  locking on `UPDATE` is what makes the rank engine race-safe. Only Supabase's Postgres is used —
-  its Auth, Storage, and Realtime products are explicitly out of scope; do not wire them in
-  without asking, since guest checkout with no user accounts is a deliberate decision (see
-  Non-goals)
+- PostgreSQL (Supabase, Singapore region) via `@supabase/supabase-js` — no ORM. Schema lives as
+  raw SQL in `supabase/migrations/` (applied by `scripts/apply-migration.mjs`, a thin `pg`-based
+  runner — not the Supabase CLI, which needs an interactive login this team can't do headlessly).
+  App runtime (`lib/supabase/server.ts`) uses `SUPABASE_SERVICE_ROLE_KEY`, which bypasses RLS
+  entirely — the same "no card data leaves our server" trust boundary as before, just via
+  Supabase's API instead of a raw Postgres connection. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is
+  configured but unused (see Non-goals-adjacent note below) — every table's RLS policies (or
+  absence of any) are the safety net if it's ever wired up by mistake, not the primary defense.
+  The rank engine's atomic write is a Postgres RPC function, `increment_listing_amount()` — see
+  Safety rules. Only Supabase's Postgres is used — its Auth, Storage, and Realtime products are
+  explicitly out of scope; do not wire them in without asking, since guest checkout with no user
+  accounts is a deliberate decision (see Non-goals)
 - 9Pay — payment gateway (checkout session + IPN webhook), reused integration pattern from
   ContentSuper.com
 - Claude API (Haiku) — one-shot category classification at submission time
@@ -80,37 +84,41 @@ ceremony.
 ```
 app/
   page.tsx                    # homepage leaderboard (walking skeleton — S1-T6)
-  page.test.tsx
   layout.tsx                  # mounts sonner's <Toaster />
   globals.css                 # Tailwind v4 directives
   (public)/                   # (planned) category/[slug], categories, rules, about, submit
   admin/                      # (planned, S4) protected admin panel
-  api/webhooks/9pay/          # (planned, S3) ONLY place allowed to write listings.amount
+  api/webhooks/9pay/          # (planned, S3) ONLY place allowed to call increment_listing_amount()
 lib/
-  db.ts                       # Prisma client (driver adapter, pooled DATABASE_URL)
-  db.test.ts
+  supabase/
+    server.ts                 # service_role client (server-only, RLS bypassed)
+    server.test.ts
+    database.types.ts         # hand-written Database type — keep in sync with SQL by hand
   normalize-identity.ts       # (planned, S2) canonical identity_key logic
   payment/9pay.ts             # (planned, S3)
   categorize.ts               # (planned, S2) LLM category classifier
-prisma/
-  schema.prisma
-  seed.ts                     # 21 launch categories + default settings
-prisma.config.ts              # CLI datasource (DIRECT_URL) + seed command
+supabase/
+  migrations/                 # raw SQL, applied manually — see Commands. Never re-run the
+                               # init migration after real data exists; it DROPs tables.
+  seed.sql                    # 21 launch categories + default settings (idempotent, upsert-based)
+scripts/
+  apply-migration.mjs         # runs one SQL file against DIRECT_URL — dev tooling only
 docs/{specs,sprints}/
 PROGRESS.md
 ```
 
 ## Commands
 - `npm run dev` — run the app locally
-- `npm run build` — production build (requires real `DATABASE_URL`/`DIRECT_URL` — the homepage
-  queries Postgres at build time via ISR, see `app/page.tsx`)
+- `npm run build` — production build (requires real Supabase env vars — the homepage queries
+  Postgres at build time via ISR, see `app/page.tsx`)
 - `npm test` — unit tests (Vitest + Testing Library, jsdom)
 - `npm run lint` — ESLint (flat config, Next core-web-vitals + TypeScript + Prettier compat)
 - `npm run typecheck` — `tsc --noEmit`
 - `npm run format` — Prettier, writes in place
-- `npx prisma generate` — regenerate the Prisma Client after any schema change
-- `npx prisma migrate dev` — apply schema migrations locally (needs real `DIRECT_URL`)
-- `npx prisma db seed` — run `prisma/seed.ts` (needs real `DIRECT_URL`)
+- `node scripts/apply-migration.mjs supabase/migrations/<file>.sql` — apply one migration file
+  (needs `DIRECT_URL`). Additive migrations only after Sprint 1 — never reuse the DROP-based init
+  pattern once real data exists.
+- `npm run db:seed` — apply `supabase/seed.sql` (needs `DIRECT_URL`, safe to re-run)
 
 ## Conventions
 - Money is stored as integer VNĐ (no decimals, no floats) everywhere — `listings.amount`,
@@ -138,21 +146,26 @@ PROGRESS.md
 - Scope changes mid-sprint go to the backlog in `feature-spec.md`, not into the current sprint.
 
 ## Safety rules
-- Secrets never enter the repo. Configuration via environment variables (`DATABASE_URL` — pooled
-  Supabase connection, `DIRECT_URL` — direct Supabase connection for migrations,
-  `ANTHROPIC_API_KEY`, `NINE_PAY_MERCHANT_KEY`, `NINE_PAY_SECRET_KEY`); keep `.env.example`
-  current and `.env` gitignored. If a secret ever lands in a commit, stop and tell the user —
-  rotating it is their call.
+- Secrets never enter the repo. Configuration via environment variables
+  (`SUPABASE_SERVICE_ROLE_KEY` — server-only, bypasses RLS; `NEXT_PUBLIC_SUPABASE_URL`,
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` — browser-safe by design, but currently unused by any code;
+  `DATABASE_URL`/`DIRECT_URL` — dev-tooling-only direct Postgres connection for
+  `scripts/apply-migration.mjs`; `ANTHROPIC_API_KEY`; `NINE_PAY_MERCHANT_KEY`,
+  `NINE_PAY_SECRET_KEY`); keep `.env.example` current and `.env` gitignored. If a secret ever
+  lands in a commit, stop and tell the user — rotating it is their call.
 - Ask before anything destructive or hard to reverse: dropping/altering DB tables with data,
-  deleting files outside the repo, force-pushing, and anything touching production.
+  deleting files outside the repo, force-pushing, and anything touching production. Migrations in
+  `supabase/migrations/` are additive-only past Sprint 1 — a migration that drops or truncates a
+  table with real data needs explicit user approval before it's written, not just before it's run.
 - Dependencies: prefer mainstream, actively maintained packages; check the name carefully
   (typosquatting) and the license before adding. No new dependency for something under ~20 lines.
 - Never commit with failing checks and never bypass hooks (`--no-verify`).
 - No real user data (real emails, real payment details) in tests, fixtures, or logs.
 - **Rank integrity is the core threat model.** Only the verified 9Pay IPN webhook handler
-  (`app/api/webhooks/9pay/route.ts`) may write `listings.amount` or `listings.first_confirmed_at`,
-  and only via `amount = amount + delta` inside a DB transaction — never a read-modify-write from
-  application code, never from the submit form, never from the `return_url` redirect handler.
+  (`app/api/webhooks/9pay/route.ts`) may call `increment_listing_amount()` (the only way
+  `listings.amount`/`first_confirmed_at` change) — never a read-modify-write from application
+  code, never from the submit form, never from the `return_url` redirect handler. The function has
+  `EXECUTE` revoked from `anon`/`authenticated` at the DB level, not just gated in app code.
 - Payments: no card data ever touches our servers or logs — 9Pay's hosted checkout only. Every
   inbound webhook call verifies the checksum/signature before any processing; an invalid signature
   is rejected outright.
@@ -177,3 +190,13 @@ PROGRESS.md
   manually; content safety relies on manual admin review (`docs/sprints/sprint-04-admin-moderation.md`).
 - No third-party analytics vendor in the MVP — the footer revenue counter and online count are
   computed from BidTop's own tables.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
