@@ -14,6 +14,14 @@ const bodySchema = z.object({
   email: z.string().email(),
 });
 
+// TEST-ONLY: bypasses the minimum-amount checks below when submitting under
+// the founder's own email, so real-payment testing (SePay has no
+// sandbox-safe substitute for a real production charge) costs as little as
+// possible. Never bypasses payment itself — the amount still goes through
+// the real gateway and still only ranks up via the verified webhook. Remove
+// before real launch — see PROGRESS.md Blockers.
+const TEST_BYPASS_EMAIL = "ntkhang@gmail.com";
+
 // Creates (or tops up) a draft listing + a pending bid. Never touches
 // listings.amount directly — that field stays 0 (new) or unchanged (top-up)
 // until the active gateway's IPN webhook (currently app/api/webhooks/sepay —
@@ -25,6 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Dữ liệu không hợp lệ." }, { status: 400 });
   }
   const { identity, amount, categorySlug, email } = parsed.data;
+  const isTestBypass = email.toLowerCase() === TEST_BYPASS_EMAIL;
 
   let identityKey: string;
   try {
@@ -80,7 +89,7 @@ export async function POST(request: Request) {
       );
     }
     const minimum = existing.amount + settings.min_increment;
-    if (amount < minimum) {
+    if (!isTestBypass && amount < minimum) {
       return NextResponse.json(
         { error: `Số tiền tối thiểu là ${minimum.toLocaleString("vi-VN")}đ.` },
         { status: 400 },
@@ -89,7 +98,7 @@ export async function POST(request: Request) {
     listingId = existing.id;
     deltaAmount = amount - existing.amount;
   } else {
-    if (amount < settings.starting_price) {
+    if (!isTestBypass && amount < settings.starting_price) {
       return NextResponse.json(
         { error: `Số tiền tối thiểu là ${settings.starting_price.toLocaleString("vi-VN")}đ.` },
         { status: 400 },

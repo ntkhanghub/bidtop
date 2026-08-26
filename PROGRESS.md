@@ -601,3 +601,11 @@ reflected back into the spec file. -->
   before building it, since it's a permanent exception, not a temporary one like mock-confirm. User
   was about to check `mc.zalopay.vn` for a real webhook/API before this got paused — pick that back
   up when resuming.
+- **Test-only minimum-amount bypass for `ntkhang@gmail.com`** (`TEST_BYPASS_EMAIL` in
+  `app/api/listings/submit/route.ts` and `app/(public)/submit/submit-form.tsx`) — lets the founder
+  submit/top-up with any amount (even a few thousand đ) instead of the normal starting-price/
+  min-increment rule, to keep real SePay payments cheap while debugging the live webhook delivery
+  issue above. Doesn't touch payment or rank-write logic at all — only which amount is allowed
+  through the form. **Must be removed before real launch** (same category as `mock-confirm`/QR
+  tĩnh — flagged, not forgotten). Verified live in-browser: submitting with this email and 5,000đ
+  reached a real signed SePay checkout page; test row cleaned up afterward.

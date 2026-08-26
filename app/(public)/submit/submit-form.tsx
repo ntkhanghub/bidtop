@@ -17,6 +17,12 @@ import {
 
 type Category = { slug: string; name_vi: string };
 
+// TEST-ONLY: keep in sync with app/api/listings/submit/route.ts's
+// TEST_BYPASS_EMAIL — skips the client-side minimum-amount check for the
+// same reason (cheap real-payment testing). The server enforces this too;
+// this only avoids blocking the request before it ever reaches the server.
+const TEST_BYPASS_EMAIL = "ntkhang@gmail.com";
+
 type LookupResult = {
   identityKey: string;
   isNew: boolean;
@@ -84,7 +90,8 @@ export function SubmitForm({
     setSubmitError(null);
 
     const amountNumber = Number(amount);
-    if (lookup && amountNumber < lookup.minimumRequired) {
+    const isTestBypass = email.trim().toLowerCase() === TEST_BYPASS_EMAIL;
+    if (!isTestBypass && lookup && amountNumber < lookup.minimumRequired) {
       setAmountError(`Số tiền tối thiểu là ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`);
       return;
     }
