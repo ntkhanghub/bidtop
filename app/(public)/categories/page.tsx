@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/server";
+import { Badge } from "@/components/ui/badge";
 
 export const revalidate = 30;
 
@@ -21,14 +22,14 @@ export default async function CategoriesPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
-      <h1 className="text-2xl font-bold text-neutral-900">Danh mục</h1>
-      <ul className="mt-4 divide-y divide-neutral-200">
+      <h1 className="text-2xl font-bold text-foreground">Danh mục</h1>
+      <ul className="mt-4 divide-y divide-border">
         {(categories ?? []).map((c, i) => (
           <li key={c.id} className="flex items-center justify-between py-3">
-            <Link href={`/category/${c.slug}`} className="text-neutral-900 hover:underline">
+            <Link href={`/category/${c.slug}`} className="text-foreground hover:underline">
               {c.name_vi}
             </Link>
-            <span className="text-neutral-500">{counts[i].count ?? 0}</span>
+            <Badge variant="secondary">{counts[i].count ?? 0}</Badge>
           </li>
         ))}
       </ul>

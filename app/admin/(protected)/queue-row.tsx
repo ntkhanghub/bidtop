@@ -2,6 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Listing = {
   id: string;
@@ -59,65 +70,65 @@ export function QueueRow({ listing, categories }: { listing: Listing; categories
   }
 
   return (
-    <li className="rounded border border-neutral-200 p-4">
-      <div className="flex items-center justify-between">
+    <Card className="p-4">
+      <div className="flex items-center justify-between gap-3">
         <a
           href={listing.display_url}
           target="_blank"
           rel="noreferrer"
-          className="font-medium text-neutral-900 hover:underline"
+          className="font-medium text-foreground hover:underline"
         >
           {listing.display_url}
         </a>
-        <span className="text-neutral-500">{listing.amount.toLocaleString("vi-VN")}đ</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge className="bg-accent text-accent-foreground">Chờ duyệt</Badge>
+          <span className="font-mono text-sm tabular-nums text-muted-foreground">
+            {listing.amount.toLocaleString("vi-VN")}đ
+          </span>
+        </div>
       </div>
-      <p className="mt-1 text-sm text-neutral-500">{listing.submitter_email}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{listing.submitter_email}</p>
       <div className="mt-3 flex items-center gap-2">
-        <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name_vi}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={handleApprove}
-          disabled={submitting}
-          className="rounded bg-neutral-900 px-3 py-1 text-sm text-white hover:bg-neutral-700 disabled:opacity-50"
-        >
+        <Select value={categoryId} onValueChange={setCategoryId}>
+          <SelectTrigger size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name_vi}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button onClick={handleApprove} disabled={submitting} size="sm">
           Duyệt
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => setShowReject((v) => !v)}
           disabled={submitting}
-          className="rounded border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+          variant="outline"
+          size="sm"
+          className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
         >
           Từ chối
-        </button>
+        </Button>
       </div>
       {showReject && (
         <div className="mt-2 flex items-center gap-2">
-          <input
+          <Input
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Lý do từ chối"
-            className="flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
+            className="flex-1"
           />
-          <button
-            onClick={handleReject}
-            disabled={submitting}
-            className="rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700 disabled:opacity-50"
-          >
+          <Button onClick={handleReject} disabled={submitting} variant="destructive" size="sm">
             Xác nhận từ chối
-          </button>
+          </Button>
         </div>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-    </li>
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+    </Card>
   );
 }

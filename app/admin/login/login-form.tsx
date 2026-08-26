@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CircleAlert } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function LoginForm() {
   const router = useRouter();
@@ -38,31 +43,34 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
       <div>
-        <label className="block text-sm font-medium text-neutral-700">Email</label>
-        <input
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded border border-neutral-300 px-3 py-2"
+          className="mt-1"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-neutral-700">Mật khẩu</label>
-        <input
+        <Label htmlFor="password">Mật khẩu</Label>
+        <Input
+          id="password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded border border-neutral-300 px-3 py-2"
+          className="mt-1"
         />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-700 disabled:opacity-50"
-      >
+      {error && (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <Button type="submit" disabled={submitting}>
         {submitting ? "Đang đăng nhập..." : "Đăng nhập"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -59,8 +59,8 @@ export default async function Home({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
-      <h1 className="text-2xl font-bold text-neutral-900">BidTop.vn</h1>
-      <p className="mt-1 text-neutral-500">Rank là số tiền đã trả — không gì khác.</p>
+      <h1 className="text-2xl font-bold text-foreground">BidTop.vn</h1>
+      <p className="mt-1 text-muted-foreground">Rank là số tiền đã trả — không gì khác.</p>
       <Leaderboard
         listings={listings ?? []}
         page={page}

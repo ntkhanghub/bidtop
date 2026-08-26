@@ -15,7 +15,7 @@ export default async function AdminSettingsPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-neutral-900">Cài đặt</h1>
+      <h1 className="text-xl font-bold text-foreground">Cài đặt</h1>
       <SettingsForm
         startingPrice={Number(settings.starting_price ?? 0)}
         minIncrement={Number(settings.min_increment ?? 0)}

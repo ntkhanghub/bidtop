@@ -1,6 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import type { AdminRole } from "@/lib/supabase/database.types";
 
 export function AccountMenu({ email, role }: { email: string; role: AdminRole }) {
@@ -13,26 +16,26 @@ export function AccountMenu({ email, role }: { email: string; role: AdminRole })
   }
 
   return (
-    <div className="border-t border-neutral-200 p-3">
+    <div className="border-t border-sidebar-border p-3">
       <div className="flex items-center gap-2.5 rounded-md p-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white">
-          {email[0]?.toUpperCase()}
-        </div>
+        <Avatar>
+          <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground">
+            {email[0]?.toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium text-neutral-900">{email}</div>
-          <div className="text-xs text-neutral-500">{role}</div>
+          <div className="truncate text-[13px] font-medium text-sidebar-foreground">{email}</div>
+          <div className="text-xs text-muted-foreground">{role}</div>
         </div>
-        <button
+        <Button
           onClick={handleLogout}
           title="Đăng xuất"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 text-muted-foreground hover:text-sidebar-accent-foreground"
         >
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 3H4.5C3.67 3 3 3.67 3 4.5V15.5C3 16.33 3.67 17 4.5 17H8" />
-            <path d="M13 13.5L17 10L13 6.5" />
-            <line x1="17" y1="10" x2="7.5" y2="10" />
-          </svg>
-        </button>
+          <LogOut />
+        </Button>
       </div>
     </div>
   );

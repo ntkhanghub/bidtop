@@ -11,16 +11,22 @@ export default async function RulesPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
-      <h1 className="text-2xl font-bold text-neutral-900">Luật chơi</h1>
-      <div className="mt-4 flex flex-col gap-4 text-neutral-700">
+      <h1 className="text-2xl font-bold text-foreground">Luật chơi</h1>
+      <div className="mt-4 flex flex-col gap-4 text-foreground/80">
         <p>
           Thứ hạng trên BidTop.vn là số tiền đã trả — không có yếu tố nào khác. Ai trả nhiều hơn sẽ
           đứng cao hơn, bất kỳ lúc nào.
         </p>
         <p>
-          Giá khởi điểm cho 1 listing mới là {settings.starting_price?.toLocaleString("vi-VN")}đ.
-          Mỗi lần nâng hạng (listing mới hoặc đã có) phải tăng tối thiểu{" "}
-          {settings.min_increment?.toLocaleString("vi-VN")}đ so với số tiền hiện tại.
+          Giá khởi điểm cho 1 listing mới là{" "}
+          <span className="font-mono tabular-nums">
+            {settings.starting_price?.toLocaleString("vi-VN")}đ
+          </span>
+          . Mỗi lần nâng hạng (listing mới hoặc đã có) phải tăng tối thiểu{" "}
+          <span className="font-mono tabular-nums">
+            {settings.min_increment?.toLocaleString("vi-VN")}đ
+          </span>{" "}
+          so với số tiền hiện tại.
         </p>
         <p>
           VAT {settings.vat_percent}% được tính riêng, cộng thêm vào số tiền thanh toán — không nằm

@@ -13,9 +13,9 @@ export default async function AdminHomePage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-neutral-900">Hàng chờ duyệt</h1>
+      <h1 className="text-xl font-bold text-foreground">Hàng chờ duyệt</h1>
       {!listings || listings.length === 0 ? (
-        <p className="mt-4 text-neutral-500">Không có listing nào đang chờ duyệt.</p>
+        <p className="mt-4 text-muted-foreground">Không có listing nào đang chờ duyệt.</p>
       ) : (
         <ul className="mt-4 flex flex-col gap-4">
           {listings.map((listing) => (

@@ -7,7 +7,7 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
 
   return (
     <div className="flex h-screen">
-      <div className="flex w-64 shrink-0 flex-col justify-between border-r border-neutral-200">
+      <div className="flex w-64 shrink-0 flex-col justify-between border-r border-sidebar-border bg-sidebar">
         <SidebarNav showSettings={session.role === "super_admin"} />
         <AccountMenu email={session.email} role={session.role} />
       </div>

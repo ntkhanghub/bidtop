@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase/server";
 import type { ListingStatus } from "@/lib/supabase/database.types";
 import { ListingRow } from "./listing-row";
@@ -9,6 +12,12 @@ const STATUS_OPTIONS: { value: ListingStatus; label: string }[] = [
   { value: "rejected", label: "Đã từ chối" },
   { value: "unpublished", label: "Đã gỡ" },
 ];
+
+// Plain native <select>s here (not the shadcn Select) — this form is a zero-JS
+// server-rendered GET form (bookmarkable URLs, no client component needed);
+// Radix's Select can't participate in native form submission the same way.
+const nativeSelectClass =
+  "h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export default async function AdminListingsPage({
   searchParams,
@@ -62,17 +71,17 @@ export default async function AdminListingsPage({
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-neutral-900">Quản lý link</h1>
+      <h1 className="text-xl font-bold text-foreground">Quản lý link</h1>
 
       <form method="GET" className="mt-4 flex flex-wrap items-center gap-2">
-        <input
+        <Input
           type="text"
           name="q"
           defaultValue={q}
           placeholder="Tìm theo URL hoặc email..."
-          className="rounded border border-neutral-300 px-3 py-2 text-sm"
+          className="h-9 w-56"
         />
-        <select name="category" defaultValue={categoryId} className="rounded border border-neutral-300 px-2 py-2 text-sm">
+        <select name="category" defaultValue={categoryId} className={nativeSelectClass}>
           <option value="">Tất cả category</option>
           {(categories ?? []).map((c) => (
             <option key={c.id} value={c.id}>
@@ -80,20 +89,20 @@ export default async function AdminListingsPage({
             </option>
           ))}
         </select>
-        <select name="status" defaultValue={status} className="rounded border border-neutral-300 px-2 py-2 text-sm">
+        <select name="status" defaultValue={status} className={nativeSelectClass}>
           {STATUS_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
           ))}
         </select>
-        <button type="submit" className="rounded bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-700">
+        <Button type="submit" size="sm">
           Lọc
-        </button>
+        </Button>
       </form>
 
       {!listings || listings.length === 0 ? (
-        <p className="mt-4 text-neutral-500">Không có listing nào khớp.</p>
+        <p className="mt-4 text-muted-foreground">Không có listing nào khớp.</p>
       ) : (
         <ul className="mt-4 flex flex-col gap-4">
           {listings.map((listing) => (
@@ -105,17 +114,21 @@ export default async function AdminListingsPage({
       {totalPages > 1 && (
         <div className="mt-4 flex items-center gap-2 text-sm">
           {page > 1 && (
-            <Link href={pageHref(page - 1)} className="text-neutral-500 hover:text-neutral-900">
-              ← Trước
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link href={pageHref(page - 1)}>
+                <ChevronLeft /> Trước
+              </Link>
+            </Button>
           )}
-          <span className="text-neutral-500">
+          <span className="text-muted-foreground">
             Trang {page}/{totalPages}
           </span>
           {page < totalPages && (
-            <Link href={pageHref(page + 1)} className="text-neutral-500 hover:text-neutral-900">
-              Sau →
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link href={pageHref(page + 1)}>
+                Sau <ChevronRight />
+              </Link>
+            </Button>
           )}
         </div>
       )}

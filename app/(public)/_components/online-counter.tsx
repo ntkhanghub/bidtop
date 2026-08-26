@@ -29,5 +29,10 @@ export function OnlineCounter() {
   }, []);
 
   if (count === null) return null;
-  return <span>{count} đang online</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="size-1.5 rounded-full bg-live" />
+      <span className="text-live">{count} đang online</span>
+    </span>
+  );
 }

@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function SettingsForm({
   startingPrice,
@@ -43,39 +46,38 @@ export function SettingsForm({
   return (
     <form onSubmit={handleSubmit} className="mt-6 flex max-w-sm flex-col gap-4">
       <div>
-        <label className="block text-sm font-medium text-neutral-700">Giá khởi điểm (VNĐ)</label>
-        <input
+        <Label htmlFor="starting_price">Giá khởi điểm (VNĐ)</Label>
+        <Input
+          id="starting_price"
           type="number"
           value={values.starting_price}
           onChange={(e) => setValues((v) => ({ ...v, starting_price: e.target.value }))}
-          className="mt-1 w-full rounded border border-neutral-300 px-3 py-2"
+          className="mt-1 font-mono"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-neutral-700">Bước tăng tối thiểu (VNĐ)</label>
-        <input
+        <Label htmlFor="min_increment">Bước tăng tối thiểu (VNĐ)</Label>
+        <Input
+          id="min_increment"
           type="number"
           value={values.min_increment}
           onChange={(e) => setValues((v) => ({ ...v, min_increment: e.target.value }))}
-          className="mt-1 w-full rounded border border-neutral-300 px-3 py-2"
+          className="mt-1 font-mono"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-neutral-700">VAT (%)</label>
-        <input
+        <Label htmlFor="vat_percent">VAT (%)</Label>
+        <Input
+          id="vat_percent"
           type="number"
           value={values.vat_percent}
           onChange={(e) => setValues((v) => ({ ...v, vat_percent: e.target.value }))}
-          className="mt-1 w-full rounded border border-neutral-300 px-3 py-2"
+          className="mt-1 font-mono"
         />
       </div>
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded bg-neutral-900 px-4 py-2 text-white hover:bg-neutral-700 disabled:opacity-50"
-      >
+      <Button type="submit" disabled={submitting}>
         {submitting ? "Đang lưu..." : "Lưu"}
-      </button>
+      </Button>
     </form>
   );
 }

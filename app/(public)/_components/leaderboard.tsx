@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ListingRow } from "./listing-row";
 
 type Listing = { id: string; display_url: string; amount: number };
@@ -29,7 +31,7 @@ export function Leaderboard({
 
   if (listings.length === 0 && page === 1) {
     return (
-      <p className="mt-4 text-neutral-500">
+      <p className="mt-4 text-muted-foreground">
         Chưa có listing nào được duyệt. Rank là số tiền đã trả — không gì khác.
       </p>
     );
@@ -41,14 +43,14 @@ export function Leaderboard({
   return (
     <div>
       {page === 1 && (
-        <div className="mt-4 flex items-center justify-between rounded border border-dashed border-neutral-300 px-4 py-3 text-sm text-neutral-500">
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           <span>Muốn đứng #1?</span>
-          <Link href={`/submit?amount=${topClaimAmount}`} className="font-medium text-neutral-900 hover:underline">
-            Giành hạng #1
-          </Link>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/submit?amount=${topClaimAmount}`}>Giành hạng #1</Link>
+          </Button>
         </div>
       )}
-      <ol className="mt-2 divide-y divide-neutral-200">
+      <ol className="mt-2 divide-y divide-border">
         {listings.map((listing, index) => (
           <ListingRow
             key={listing.id}
@@ -61,17 +63,21 @@ export function Leaderboard({
       {totalPages > 1 && (
         <div className="mt-4 flex items-center gap-2 text-sm">
           {page > 1 && (
-            <Link href={pageHref(page - 1)} className="text-neutral-500 hover:text-neutral-900">
-              ← Trước
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link href={pageHref(page - 1)}>
+                <ChevronLeft /> Trước
+              </Link>
+            </Button>
           )}
-          <span className="text-neutral-500">
+          <span className="text-muted-foreground">
             Trang {page}/{totalPages}
           </span>
           {page < totalPages && (
-            <Link href={pageHref(page + 1)} className="text-neutral-500 hover:text-neutral-900">
-              Sau →
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link href={pageHref(page + 1)}>
+                Sau <ChevronRight />
+              </Link>
+            </Button>
           )}
         </div>
       )}

@@ -3,6 +3,16 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ListingStatus } from "@/lib/supabase/database.types";
 
 type Listing = {
@@ -17,6 +27,15 @@ type Listing = {
   unpublished_at: string | null;
 };
 type Category = { id: string; slug: string; name_vi: string };
+
+const STATUS_BADGE: Record<ListingStatus, { label: string; className: string }> = {
+  approved: { label: "Đã duyệt", className: "bg-live/15 text-live" },
+  rejected: { label: "Đã từ chối", className: "bg-destructive/15 text-destructive" },
+  unpublished: { label: "Đã gỡ", className: "bg-muted text-muted-foreground" },
+  paid_pending_review: { label: "Chờ duyệt", className: "bg-accent/20 text-accent-foreground" },
+  draft: { label: "Nháp", className: "bg-muted text-muted-foreground" },
+  pending_payment: { label: "Chờ thanh toán", className: "bg-muted text-muted-foreground" },
+};
 
 export function ListingRow({ listing, categories }: { listing: Listing; categories: Category[] }) {
   const router = useRouter();
@@ -59,69 +78,71 @@ export function ListingRow({ listing, categories }: { listing: Listing; categori
     toast.success("Đã đăng lại listing");
   }
 
+  const statusBadge = STATUS_BADGE[listing.status];
+
   return (
-    <li className="rounded border border-neutral-200 p-4">
-      <div className="flex items-center justify-between">
+    <Card className="p-4">
+      <div className="flex items-center justify-between gap-3">
         <a
           href={listing.display_url}
           target="_blank"
           rel="noreferrer"
-          className="font-medium text-neutral-900 hover:underline"
+          className="font-medium text-foreground hover:underline"
         >
           {listing.display_url}
         </a>
-        <span className="text-neutral-500">{listing.amount.toLocaleString("vi-VN")}đ</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge className={statusBadge.className}>{statusBadge.label}</Badge>
+          <span className="font-mono text-sm tabular-nums text-muted-foreground">
+            {listing.amount.toLocaleString("vi-VN")}đ
+          </span>
+        </div>
       </div>
-      <p className="mt-1 text-sm text-neutral-500">{listing.submitter_email}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{listing.submitter_email}</p>
 
       {listing.status === "rejected" && listing.rejection_reason && (
-        <p className="mt-2 text-sm text-red-600">Lý do từ chối: {listing.rejection_reason}</p>
+        <p className="mt-2 text-sm text-destructive">Lý do từ chối: {listing.rejection_reason}</p>
       )}
       {listing.status === "unpublished" && listing.unpublished_at && (
-        <p className="mt-2 text-sm text-neutral-500">
+        <p className="mt-2 text-sm text-muted-foreground">
           Đã gỡ lúc {new Date(listing.unpublished_at).toLocaleString("vi-VN")}
         </p>
       )}
 
       <div className="mt-3 flex items-center gap-2">
-        <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
-        >
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name_vi}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={handleSaveCategory}
-          disabled={submitting}
-          className="rounded border border-neutral-300 px-3 py-1 text-sm text-neutral-900 hover:bg-neutral-50 disabled:opacity-50"
-        >
+        <Select value={categoryId} onValueChange={setCategoryId}>
+          <SelectTrigger size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name_vi}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button onClick={handleSaveCategory} disabled={submitting} variant="outline" size="sm">
           Lưu category
-        </button>
+        </Button>
 
         {listing.status === "approved" && (
-          <button
+          <Button
             onClick={handleUnpublish}
             disabled={submitting}
-            className="rounded border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+            variant="outline"
+            size="sm"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             Gỡ
-          </button>
+          </Button>
         )}
         {listing.status === "unpublished" && (
-          <button
-            onClick={handleRepublish}
-            disabled={submitting}
-            className="rounded bg-neutral-900 px-3 py-1 text-sm text-white hover:bg-neutral-700 disabled:opacity-50"
-          >
+          <Button onClick={handleRepublish} disabled={submitting} size="sm">
             Đăng lại
-          </button>
+          </Button>
         )}
       </div>
-    </li>
+    </Card>
   );
 }
