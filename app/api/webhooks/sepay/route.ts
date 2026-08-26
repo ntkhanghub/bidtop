@@ -28,16 +28,36 @@ const orderPaidSchema = z.object({
 // NEVER log the raw request body: SePay's payload can carry
 // card_number/card_holder_name/card_expiry (see CLAUDE.md "no card data ever
 // touches our servers or logs") — only ever log extracted, non-card fields.
+// TEMPORARY diagnostic logging — Sprint 3's SePay integration is failing to
+// confirm real IPN deliveries in production for an unknown reason (secret
+// header + IPN URL config already double-checked and fixed once, still
+// failing) and there's no other way to inspect what SePay is actually
+// sending. Logs only structural/non-sensitive info: header presence, top-
+// level JSON keys, notification_type, order_invoice_number/order_amount,
+// zod issue paths — NEVER full request bodies or card_number/card_holder_
+// name/card_expiry (see CLAUDE.md "no card data ever touches our servers or
+// logs"). Remove once the real payload shape is confirmed and this route is
+// working — see PROGRESS.md.
 export async function POST(request: Request) {
-  if (!verifySepayIpnSecret(request.headers.get("x-secret-key"))) {
+  const secretHeader = request.headers.get("x-secret-key");
+  console.log(
+    `SePay IPN received: secret header present=${secretHeader !== null}, length=${secretHeader?.length ?? 0}`,
+  );
+  if (!verifySepayIpnSecret(secretHeader)) {
     return NextResponse.json({ error: "invalid secret" }, { status: 401 });
   }
 
   const body = await request.json().catch(() => null);
+  console.log(
+    `SePay IPN body top-level keys: ${body && typeof body === "object" ? Object.keys(body).join(",") : "not-an-object"}`,
+  );
+
   const typeCheck = notificationTypeSchema.safeParse(body);
   if (!typeCheck.success) {
+    console.log("SePay IPN: notification_type missing/not a string:", typeCheck.error.issues);
     return NextResponse.json({ error: "invalid payload" }, { status: 400 });
   }
+  console.log("SePay IPN notification_type:", typeCheck.data.notification_type);
   // Other notification types (e.g. TRANSACTION_VOID) are acked as a no-op
   // rather than rejected — parsing only the discriminator first, before
   // applying the stricter ORDER_PAID schema, avoids silently dropping a
@@ -48,8 +68,29 @@ export async function POST(request: Request) {
 
   const parsed = orderPaidSchema.safeParse(body);
   if (!parsed.success) {
+    console.log(
+      "SePay IPN: ORDER_PAID payload didn't match expected shape:",
+      JSON.stringify(parsed.error.issues),
+    );
+    const bodyRecord = body as Record<string, unknown>;
+    console.log(
+      "SePay IPN order/transaction top-level keys:",
+      JSON.stringify({
+        orderKeys:
+          bodyRecord.order && typeof bodyRecord.order === "object"
+            ? Object.keys(bodyRecord.order)
+            : null,
+        transactionKeys:
+          bodyRecord.transaction && typeof bodyRecord.transaction === "object"
+            ? Object.keys(bodyRecord.transaction)
+            : null,
+      }),
+    );
     return NextResponse.json({ error: "invalid ORDER_PAID payload" }, { status: 400 });
   }
+  console.log(
+    `SePay IPN parsed: order_invoice_number=${parsed.data.order.order_invoice_number}, order_amount=${parsed.data.order.order_amount}`,
+  );
   const { order, transaction } = parsed.data;
 
   const { data: bid } = await supabase
@@ -58,6 +99,7 @@ export async function POST(request: Request) {
     .eq("gateway_order_id", order.order_invoice_number)
     .maybeSingle();
   if (!bid) {
+    console.log(`SePay IPN: no bid found for gateway_order_id=${order.order_invoice_number}`);
     // Unknown order_invoice_number (e.g. a stale/manual test order) — ack so
     // SePay doesn't keep retrying an order we'll never recognize.
     return NextResponse.json({ ok: true });
@@ -73,6 +115,7 @@ export async function POST(request: Request) {
   }
 
   if (bid.status === "confirmed") {
+    console.log(`SePay IPN: bid ${bid.id} already confirmed, no-op`);
     return NextResponse.json({ ok: true });
   }
 
@@ -111,5 +154,6 @@ export async function POST(request: Request) {
     }
   }
 
+  console.log(`SePay IPN: bid ${bid.id} confirmed, listing ${bid.listing_id} status=${result[0].status}`);
   return NextResponse.json({ ok: true });
 }
