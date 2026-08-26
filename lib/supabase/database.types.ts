@@ -128,6 +128,15 @@ export interface Database {
         Args: { p_listing_id: string; p_delta: number };
         Returns: { amount: number; status: ListingStatus; first_confirmed_at: string | null }[];
       };
+      confirm_bid_and_increment: {
+        Args: { p_bid_id: string; p_gateway_txn_id: string };
+        Returns: {
+          amount: number;
+          status: ListingStatus;
+          first_confirmed_at: string | null;
+          already_confirmed: boolean;
+        }[];
+      };
     };
   };
 }

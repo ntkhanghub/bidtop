@@ -1,80 +1,93 @@
 # Sprint 3 — Payment integration & atomic rank engine
 
-**Goal:** A real 9Pay payment, confirmed only via the server-to-server IPN webhook, atomically
-updates a listing's amount — safely under concurrent/duplicate webhook delivery.
+**Goal:** A real ZaloPay payment, confirmed only via the server-to-server IPN callback, atomically
+updates a listing's amount — safely under concurrent/duplicate delivery.
 
-**Demo criteria:** At the end of this sprint you can complete a real (sandbox or small live) 9Pay
-payment for a submitted listing and see its `amount` update correctly in the database purely from
-the webhook — with the browser-side redirect proven to write nothing, and a manually-replayed
-webhook proven to be a no-op the second time.
+**Demo criteria:** At the end of this sprint you can complete a real (small, live — no sandbox
+exists for this merchant account) ZaloPay QR/wallet payment for a submitted listing and see its
+`amount` update correctly in the database purely from the webhook — with the browser-return
+redirect proven to write nothing, and a manually-replayed webhook proven to be a no-op the second
+time.
 
 ## In scope
-- F6 — 9Pay checkout + IPN webhook payment confirmation
+- F6 — ZaloPay checkout + IPN webhook payment confirmation
 - F7 — Atomic rank engine
 
 ## Out of scope
 - Admin queue UI (Sprint 4) — a `paid_pending_review` listing exists correctly in the DB after
   this sprint but has no admin UI to approve it yet
 - Public leaderboard display (Sprint 5)
+- ZaloPay's `getstatusbyapptransid` fallback query API — IPN alone satisfies this sprint's
+  acceptance criteria; see tech-spec.md Open questions
 
 ## Tasks
 
-### S3-T1 — Confirm 9Pay merchant contract
-Resolve the tech-spec's open question: obtain (or confirm reuse of) 9Pay merchant credentials,
-and pin down the exact checkout-session API request/response shape and IPN webhook payload +
-checksum algorithm from the live merchant dashboard docs.
-**Acceptance:** a documented (in code comments or a short internal note) request/response example
-for both the checkout-session call and the IPN payload, verified against a real sandbox call —
-not just public marketing pages.
+### S3-T1 — Confirm ZaloPay merchant contract
+Resolved from `developers.zalopay.vn`'s public docs + one live call to the production endpoint:
+endpoint URLs, request/response field names, and both HMAC-SHA256 mac formulas (createorder mac
+over 7 pipe-joined fields with `key1`; IPN mac over the raw `data` string with `key2`; the
+browser-return checksum over 7 different pipe-joined fields, also `key2`). Documented at the top
+of `lib/payment/zalopay.ts`.
+**Still open, needs a real signed call against production (no sandbox for this account) to
+confirm:** the mac's exact byte encoding (assumed lowercase hex) and whether
+`embeddata.redirecturl` controls the browser-return destination per-request or it's
+dashboard-configured only.
+**Acceptance:** a documented (in `lib/payment/zalopay.ts`'s top comment) request/response example
+for both the checkout-session call and the IPN payload, verified against a real call — not just
+public marketing pages.
 
-### S3-T2 — 9Pay checkout session creation
-Replace Sprint 2's placeholder redirect: call 9Pay to create a checkout session for
-`delta_amount + vat_amount`, store the `gateway_order_id` on the `bids` row, redirect the
-submitter to 9Pay's hosted checkout.
-**Acceptance:** initiating checkout from `/submit` lands the user on a real 9Pay payment page
-showing the correct total (bid delta + VAT).
+### S3-T2 — ZaloPay checkout session creation
+Replace Sprint 2's placeholder redirect: call ZaloPay to create a checkout session for
+`delta_amount + vat_amount`, QR/ZaloPay-wallet only (`bankcode=zalopayapp`, user's explicit
+choice). `bids.gateway_order_id` doubles as ZaloPay's `apptransid` (`yymmdd_xxxx`, ≤40 chars),
+generated once at bid-insert time (`app/api/listings/submit/route.ts`) so a retried checkout
+request never mints a second ZaloPay order for the same bid.
+**Acceptance:** initiating checkout from `/submit` lands the user on a real ZaloPay QR/wallet
+payment page showing the correct total (bid delta + VAT).
 
 ### S3-T3 — `return_url` handler (display-only)
-Build the page 9Pay redirects back to after payment. It renders a "processing, check back
-shortly" state and explicitly performs **no** database write.
+Build the page ZaloPay redirects back to after payment (`/submit/return`). It renders a
+"processing, check back shortly" state and explicitly performs **no** database write — it verifies
+the browser-return checksum only to pick a cosmetic message, never to gate a write.
 **Acceptance:** a code review / test confirms this route has zero `UPDATE`/`INSERT` calls against
 `listings` or `bids`; manually hitting this URL with a fake successful-looking query string does
 not change any row.
 
-### S3-T4 — IPN webhook handler: signature verification + idempotency
-Build `/api/webhooks/9pay`: verify the checksum/signature per S3-T1's findings; look up the `bids`
+### S3-T4 — IPN webhook handler: mac verification + idempotency
+Build `/api/webhooks/zalopay`: verify the HMAC-SHA256 mac per S3-T1's findings; look up the `bids`
 row by `gateway_order_id` (via `lib/supabase/server.ts`, `service_role`); if already `confirmed`,
-return success without reprocessing; otherwise proceed to S3-T5.
-**Acceptance:** a request with a tampered/invalid checksum is rejected and no DB write occurs; a
-valid webhook replayed twice results in exactly one amount increment, confirmed by a test that
-posts the same payload twice.
+return the success ack without reprocessing; otherwise proceed to S3-T5.
+**Acceptance:** a request with a tampered/invalid mac is rejected and no DB write occurs; a valid
+callback replayed twice results in exactly one amount increment, confirmed by a test that posts
+the same payload twice (`scripts/verify-zalopay-idempotency.mjs`).
 
 ### S3-T5 — Atomic amount update + status transition
-The atomic piece already exists: `increment_listing_amount(p_listing_id, p_delta)` (built and
-verified in S1-T4 — see `supabase/migrations/20260823_init.sql`) does the single-statement
-`UPDATE`, setting `first_confirmed_at` once via `coalesce` and transitioning `status` to
-`paid_pending_review` (new listing) or leaving it `approved` (top-up). This task wires the webhook
-handler to call it via `supabase.rpc('increment_listing_amount', ...)` and marks the `bids` row
-`confirmed`. **Decide here:** these are two separate calls through `supabase-js` (no client-side
-multi-statement transaction like Prisma's `$transaction`) — evaluate whether to extend the RPC
-function to also update the `bids` row in the same Postgres function call (genuinely atomic, one
-round trip) rather than leaving a window between "bid confirmed" and "amount incremented" that a
-crashed request could get stuck between.
+**Decided:** rather than two separate `supabase-js` calls (increment, then a separate `bids`
+update — the gap the original task description flagged as a decision point), a new combined
+function, `confirm_bid_and_increment(p_bid_id, p_gateway_txn_id)`
+(`supabase/migrations/20260826_confirm_bid_and_increment.sql`), row-locks the bid and does both
+the bid-confirm and the `listings` amount increment in one Postgres transaction — genuinely atomic,
+one round trip, closing the crash-window gap a two-call design would leave open. The older
+`increment_listing_amount(p_listing_id, p_delta)` (S1-T4) stays in place, additive-only, but is no
+longer called by the real flow once the interim mock is deleted.
 **Acceptance:** a test that fires two confirmations for two different bids on the *same* listing
-concurrently (e.g. parallel requests) results in a final `amount` equal to the sum of both deltas
-— no lost update; a test confirms `first_confirmed_at` is set on the first confirmation and
-unchanged by a later top-up's confirmation.
+concurrently (`scripts/verify-confirm-bid-concurrency.mjs`) results in a final `amount` equal to
+the sum of both deltas — no lost update; a test confirms `first_confirmed_at` is set on the first
+confirmation and unchanged by a later top-up's confirmation.
 
 ## Dependencies
 - Requires Sprint 2's `listings`/`bids` rows in `pending` state to confirm against.
 
 ## Risks
-- 9Pay's exact webhook retry behavior (timing, payload) is unknown until S3-T1 — if retries are
-  aggressive or payloads are inconsistent, idempotency handling (S3-T4) may need adjustment
-  mid-sprint.
+- No sandbox exists for this ZaloPay merchant account — every real end-to-end verification
+  (S3-T1's live call, the one full checkout-to-callback test) uses real money. Minimized by
+  verifying mac/idempotency/concurrency logic with correctly-signed synthetic payloads (we hold
+  `key1`/`key2` ourselves) rather than repeated real ZaloPay calls — see the verification scripts
+  above.
 
 ## Definition of Done
 - [ ] All tasks meet their acceptance criteria
 - [ ] Demo criteria verified end-to-end with a real payment
 - [ ] Tests and lint pass; no skipped tests introduced
+- [ ] `app/api/payments/mock-confirm/route.ts` deleted once the real flow is verified working
 - [ ] PROGRESS.md updated; user has reviewed the demo

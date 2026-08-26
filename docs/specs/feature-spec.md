@@ -19,7 +19,7 @@ first 77 hours), localized for VNĐ and the Vietnamese SME/startup market.
 | F3 | Static pages (`/rules`, `/about`) | Must | 5 |
 | F4 | Listing submission form + identity normalization + content validation | Must | 2 |
 | F5 | AI auto-category assignment on submit | Must | 2 |
-| F6 | 9Pay checkout + IPN webhook payment confirmation | Must | 3 |
+| F6 | ZaloPay checkout + IPN webhook payment confirmation | Must | 3 |
 | F7 | Atomic rank engine (amount = amount + delta, race-safe) | Must | 3 |
 | F8 | Admin moderation panel (approve/reject pending listings) | Must | 4 |
 | F9 | Admin settings (starting price / min increment / VAT %, super_admin only) | Must | 4 |
@@ -97,20 +97,22 @@ from 19 options myself.
 - Admin can still change the category at approval time (F8) if the classifier or the submitter
   got it wrong — this is the actual correctness backstop, not classifier accuracy.
 
-### F6 — 9Pay checkout + IPN webhook payment confirmation
-As the platform, I want payment confirmation to come only from 9Pay's server-to-server webhook so
-that no one can fake a rank by manipulating the browser redirect.
+### F6 — ZaloPay checkout + IPN webhook payment confirmation
+As the platform, I want payment confirmation to come only from ZaloPay's server-to-server IPN
+callback so that no one can fake a rank by manipulating the browser redirect.
 
 **Acceptance criteria:**
 - Submitting a valid, sufficient bid amount creates a `bids` row with `status = pending` and a
-  unique `gateway_order_id`, then redirects the user to a 9Pay checkout session for
-  `delta_amount + vat_amount`.
-- The user-facing `return_url` redirect **never** changes any `listings` or `bids` row — it only
-  renders a "processing" state. Only the IPN webhook handler writes payment outcomes.
-- The IPN webhook handler verifies the 9Pay checksum/signature on every request; a request with an
-  invalid signature is rejected (non-200 or explicit error) and never processed.
-- Receiving the same `gateway_order_id` webhook twice (9Pay retries) applies the amount increment
-  exactly once; the second delivery is a no-op that still returns success to 9Pay.
+  unique `gateway_order_id` (ZaloPay's `apptransid`), then redirects the user to a ZaloPay checkout
+  session for `delta_amount + vat_amount`.
+- The user-facing `return_url` redirect (`/submit/return`) **never** changes any `listings` or
+  `bids` row — it only renders a "processing" state. Only the IPN webhook handler writes payment
+  outcomes.
+- The IPN webhook handler verifies ZaloPay's HMAC-SHA256 mac on every request; a request with an
+  invalid mac is rejected and never processed.
+- Receiving the same `gateway_order_id` callback twice (ZaloPay retries) applies the amount
+  increment exactly once; the second delivery is a no-op that still returns a success ack to
+  ZaloPay.
 - A failed or abandoned payment leaves the listing unchanged — no partial rank, no zombie "almost
   paid" state visible anywhere public.
 
@@ -207,7 +209,7 @@ Nhóm 2) — that is a distinct product for a later, separate effort.
   Investing" needs a check against NHNN's non-recognition of crypto as a payment instrument and
   Luật Chứng khoán before any investment-return content is accepted. Neither ships until that
   review is done — do not add either as a quick category-list edit.
-- **F20 — Automated refunds:** wire a real refund API call to 9Pay when reject volume justifies
+- **F20 — Automated refunds:** wire a real refund API call to ZaloPay when reject volume justifies
   the engineering cost; MVP handles it manually.
 - **F21 — ML NSFW/content moderation:** only worth building once submission volume makes manual
   review (F8) the bottleneck.

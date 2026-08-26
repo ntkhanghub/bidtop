@@ -73,8 +73,10 @@ ceremony.
   Safety rules. Only Supabase's Postgres is used — its Auth, Storage, and Realtime products are
   explicitly out of scope; do not wire them in without asking, since guest checkout with no user
   accounts is a deliberate decision (see Non-goals)
-- ZaloPay — payment gateway (checkout session + IPN webhook); real integration deferred to
-  Sprint 3 (see PROGRESS.md Decisions — supersedes the original 9Pay choice)
+- ZaloPay — payment gateway (checkout session + IPN webhook), `lib/payment/zalopay.ts`; the classic
+  Gateway API (`v001/tpe`), QR/ZaloPay-wallet only (`bankcode=zalopayapp`), no sandbox for this
+  merchant account so `lib/payment/zalopay.ts` calls production directly (see PROGRESS.md
+  Decisions — supersedes the original 9Pay choice)
 - Claude API (Haiku) — one-shot category classification at submission time
 - Vercel — hosting, zero-ops
 - No end-user auth system. Admin auth only: stateless HMAC-signed httpOnly session cookie
@@ -91,7 +93,9 @@ app/
                                # with the online counter). Pure route group, URLs unaffected.
     page.tsx                  # homepage leaderboard — paginated 50/page, "claim this rank",
                                # activity feed. Dynamic (searchParams-driven), not ISR-cached.
-    submit/                   # moved from bare app/submit/ in S5 — same files, same URLs
+    submit/                   # moved from bare app/submit/ in S5 — same files, same URLs.
+                               # pending/ kicks off ZaloPay checkout + redirects to orderUrl;
+                               # return/ is S3-T3's display-only browser-return handler (no DB writes)
     categories/, category/[slug]/  # S5 — category browsing (F2)
     rules/, about/            # S5 — static pages (F3); about/ has a real-copy TODO placeholder
     _components/               # listing-row, leaderboard, activity-feed, online-counter (client)
@@ -101,9 +105,12 @@ app/
   admin/login/                # S4 — public login page
   api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject,category,
                                # unpublish,republish}, settings
-  api/payments/mock-confirm/  # TEMPORARY stand-in for the ZaloPay webhook, see its file comment
+  api/payments/mock-confirm/  # TEMPORARY stand-in for the ZaloPay webhook, see its file comment.
+                               # Real flow now exists (create-order/, webhooks/zalopay/ below) —
+                               # this is deleted once that flow is live-verified with a real payment.
+  api/payments/zalopay/create-order/  # S3 — starts a ZaloPay checkout session, returns orderUrl
   api/presence/heartbeat/     # S5 — "N online" heartbeat (F12), self-built, no third-party vendor
-  api/webhooks/9pay/          # (planned, S3 — gateway now ZaloPay, see PROGRESS.md Decisions)
+  api/webhooks/zalopay/       # S3 — real IPN webhook; verifies mac, calls confirm_bid_and_increment()
   out/[id]/                   # S5 — outbound click tracking (F14): records a listing_clicks row,
                                # then redirects to display_url with UTM params. Not under /api/ —
                                # a clicked <a href> returning a redirect, not a fetch() endpoint.
@@ -118,7 +125,7 @@ lib/
     server.test.ts
     database.types.ts         # hand-written Database type — keep in sync with SQL by hand
   normalize-identity.ts       # (planned, S2) canonical identity_key logic
-  payment/9pay.ts             # (planned, S3)
+  payment/zalopay.ts          # S3 — mac signing/verification, createorder call, apptransid format
   categorize.ts               # (planned, S2) LLM category classifier
 supabase/
   migrations/                 # raw SQL, applied manually — see Commands. Never re-run the
@@ -154,7 +161,7 @@ PROGRESS.md
 - Every category/listing string that's user-facing is Vietnamese; code, comments, and commit
   messages are English.
 - Commit format: Conventional Commits (`feat:`, `fix:`, `chore:`), referencing the task ID
-  (`feat(S3-T2): create 9Pay checkout session`).
+  (`feat(S3-T2): create ZaloPay checkout session`).
 - Feature flags/backwards-compat shims: don't add them pre-launch — change the code directly.
 - Toast (sonner) is for transient, non-blocking feedback: "Đã duyệt", "Đã lưu cài đặt", payment
   failure notices. Field-level validation (e.g. bid amount below the required minimum) stays as an
@@ -176,8 +183,10 @@ PROGRESS.md
   (`SUPABASE_SERVICE_ROLE_KEY` — server-only, bypasses RLS; `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_ANON_KEY` — browser-safe by design, but currently unused by any code;
   `DATABASE_URL`/`DIRECT_URL` — dev-tooling-only direct Postgres connection for
-  `scripts/apply-migration.mjs`; `ANTHROPIC_API_KEY`; `NINE_PAY_MERCHANT_KEY`,
-  `NINE_PAY_SECRET_KEY`; `ADMIN_SESSION_SECRET` — signs the admin session cookie, see
+  `scripts/apply-migration.mjs`; `ANTHROPIC_API_KEY`; `ZALOPAY_APP_ID`, `ZALOPAY_KEY1` (signs
+  outbound requests), `ZALOPAY_KEY2` (verifies inbound IPN + browser-return checksum) — production
+  credentials, no sandbox for this merchant account, see `lib/payment/zalopay.ts`;
+  `ADMIN_SESSION_SECRET` — signs the admin session cookie, see
   `lib/auth/session.ts`; `RESEND_API_KEY`, `ADMIN_NOTIFICATION_EMAIL`, `RESEND_FROM_EMAIL` —
   admin email notifications, see `lib/email/notify.ts`, all three silently no-op if unset); keep
   `.env.example` current and `.env` gitignored. If a secret ever lands in a commit, stop and tell
@@ -190,16 +199,24 @@ PROGRESS.md
   (typosquatting) and the license before adding. No new dependency for something under ~20 lines.
 - Never commit with failing checks and never bypass hooks (`--no-verify`).
 - No real user data (real emails, real payment details) in tests, fixtures, or logs.
-- **Rank integrity is the core threat model.** Only the verified gateway IPN webhook handler (the
-  planned `app/api/webhooks/9pay/route.ts` — gateway now ZaloPay, not yet built, see PROGRESS.md
-  Decisions) may call `increment_listing_amount()` (the only way `listings.amount`/
-  `first_confirmed_at` change) — never a read-modify-write from application code, never from the
-  submit form, never from the `return_url` redirect handler. The function has `EXECUTE` revoked
-  from `anon`/`authenticated` at the DB level, not just gated in app code (service_role must be
-  explicitly re-granted `EXECUTE`, see `supabase/migrations/20260824_grant_rank_engine_execute.sql`).
-  **Temporary exception:** `app/api/payments/mock-confirm/route.ts` also calls it — an
-  interim stand-in for the real webhook, deliberately ungated (reachable in production), an
-  accepted pre-launch risk per explicit user decision. Must be deleted once the real webhook lands.
+- **Rank integrity is the core threat model.** Only the verified gateway IPN webhook handler
+  (`app/api/webhooks/zalopay/route.ts`) may write `listings.amount`/`first_confirmed_at` — never a
+  read-modify-write from application code, never from the submit form, never from the `return_url`
+  redirect handler (`app/(public)/submit/return/`, display-only by design). It does so via
+  `confirm_bid_and_increment(p_bid_id, p_gateway_txn_id)`, a single Postgres function call that
+  row-locks the bid and does both the bid-confirm and the amount-increment in one transaction (see
+  `supabase/migrations/20260826_confirm_bid_and_increment.sql`) — the older
+  `increment_listing_amount(p_listing_id, p_delta)` function still exists (additive-only past
+  Sprint 1) but is no longer called by the real flow. Both functions have `EXECUTE` revoked from
+  `anon`/`authenticated` at the DB level, not just gated in app code (service_role must be
+  explicitly re-granted `EXECUTE` in the same migration file — see
+  `supabase/migrations/20260824_grant_rank_engine_execute.sql` for the exact bug this guards
+  against). **Temporary exception:** `app/api/payments/mock-confirm/route.ts` still exists and
+  still calls `increment_listing_amount()` directly — deliberately ungated (reachable in
+  production), an accepted pre-launch risk per explicit user decision. Delete it (and its call site
+  in `app/(public)/submit/pending/pending-confirm.tsx`, already rewired to the real
+  create-order/webhook flow) once that real flow is live-verified with an actual ZaloPay payment —
+  see PROGRESS.md Blockers.
 - Payments: no card data ever touches our servers or logs — the gateway's hosted checkout only
   (ZaloPay, see PROGRESS.md Decisions). Every inbound webhook call verifies the checksum/signature
   before any processing; an invalid signature is rejected outright.

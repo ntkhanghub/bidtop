@@ -22,7 +22,7 @@ than an ORM — see Assumptions for why this changed mid-project from an initial
 | Notifications | Toast (sonner) | transient feedback for payment status, admin actions, settings saves — see Conventions in CLAUDE.md for when to use toast vs. inline field errors |
 | Database | PostgreSQL (Supabase, Singapore region) | relational fits the listings/bids ledger; row-level locking on `UPDATE` is what makes the rank engine race-safe for free; Singapore region keeps latency low for VN traffic; managed dashboard/table editor is useful for a solo founder debugging data directly |
 | Data access | `@supabase/supabase-js` (server-only, service role) + hand-written raw SQL migrations in `supabase/migrations/` | user's explicit choice over an ORM. Schema is managed as plain SQL, applied via a small local script (`scripts/apply-migration.mjs`) against the direct connection — not the Supabase CLI, which would need an interactive login this team can't do headlessly. Row types are hand-written (`lib/supabase/database.types.ts`) rather than CLI-generated, for the same reason |
-| Payment | 9Pay | already integrated on ContentSuper.com (existing team experience); IPN webhook + checksum model fits the "rank only after webhook" requirement |
+| Payment | ZaloPay (Gateway API, `v001/tpe`) | user's explicit choice, see PROGRESS.md Decisions; IPN webhook + HMAC-SHA256 checksum model fits the "rank only after webhook" requirement. QR/ZaloPay-wallet only (`bankcode=zalopayapp`); no sandbox for this merchant account, so all calls go to production |
 | Hosting | Vercel | zero-ops for a solo/small team; serverless functions handle the webhook endpoint fine at this traffic scale |
 | Category classification | LLM call (Claude Haiku) at submission time | cheap, no training data needed; accuracy is not launch-critical because admin corrects it at approval (F8) |
 | Admin auth | Session cookie + hashed password (argon2id), two roles (`admin`, `super_admin`) | small, fixed set of admin accounts — no need for a managed auth provider |
@@ -35,15 +35,15 @@ Visitor ──GET──▶ / , /category/[slug]  ──▶ Next.js SSR/ISR ─�
 Submitter ─POST─▶ /submit ──▶ normalize + validate ──▶ draft listing + pending bid row
                                     │                              │
                                     ▼                              ▼
-                          9Pay checkout session          9Pay redirects submitter
-                                    │                     to return_url (display-only,
+                       ZaloPay createorder (QR/wallet)   ZaloPay redirects submitter
+                                    │                     to /submit/return (display-only,
                                     ▼                      writes nothing)
-                          9Pay IPN webhook ──POST──▶ /api/webhooks/9pay
+                       ZaloPay IPN callback ──POST──▶ /api/webhooks/zalopay
                                                             │
-                                              verify checksum + idempotency
+                                              verify HMAC mac + idempotency
                                                             │
-                              supabase.rpc('increment_listing_amount', ...)
-                              — single atomic UPDATE inside the Postgres function
+                          supabase.rpc('confirm_bid_and_increment', ...)
+                          — bid-confirm + amount UPDATE in one Postgres function/transaction
                                                             │
                               new listing → status=paid_pending_review (F8 queue)
                               top-up on approved listing → status stays approved, re-sorts now
@@ -56,7 +56,7 @@ listings/settings and nothing else; nothing in the app calls it client-side yet.
 ```
 
 No queue, no background worker: webhook volume is low enough that a synchronous transaction inside
-the serverless function is sufficient. Revisit only if 9Pay retries or traffic spikes cause
+the serverless function is sufficient. Revisit only if ZaloPay retries or traffic spikes cause
 timeouts.
 
 ## Data model
@@ -86,10 +86,17 @@ is excluded from analytics events and logs.
 
 ## External integrations
 
-- **9Pay** — checkout/payment-link creation + IPN webhook for payment confirmation. Auth: merchant
-  key/secret (env `NINE_PAY_MERCHANT_KEY`, `NINE_PAY_SECRET_KEY` — confirm exact field names
-  against the live merchant dashboard in Sprint 3; public docs only confirmed the general IPN +
-  checksum pattern, not the literal API contract). Verify checksum on every inbound webhook call.
+- **ZaloPay Gateway (`v001/tpe`)** — `POST https://zalopay.com.vn/v001/tpe/createorder`
+  (`application/x-www-form-urlencoded`) creates a checkout session; `orderurl` in the response is
+  where the submitter is redirected (QR/ZaloPay-wallet only, `bankcode=zalopayapp`). Payment
+  confirmation arrives via a server-to-server IPN callback (URL registered once in the ZaloPay
+  merchant dashboard, not a per-request field) — `POST /api/webhooks/zalopay` — carrying
+  `{ data, mac }` where `mac = HMAC_SHA256(key2, data)`; the browser-return redirect
+  (`/submit/return`) carries a separate 7-field HMAC-SHA256 checksum (also `key2`) and is
+  display-only. Auth: `ZALOPAY_APP_ID`, `ZALOPAY_KEY1` (signs outbound requests), `ZALOPAY_KEY2`
+  (verifies inbound callback + return checksum) — see `lib/payment/zalopay.ts`. No sandbox exists
+  for this merchant account; all calls go to production. Verify the mac on every inbound webhook
+  call before any DB access.
 - **Claude API (Haiku)** — one-shot category classification at submission time. Auth: env
   `ANTHROPIC_API_KEY`. Submitted content is untrusted input — never interpolate raw scraped page
   content into a system prompt with instructions in it.
@@ -120,14 +127,19 @@ is excluded from analytics events and logs.
 
 ## Security considerations
 
-- **Rank integrity is the core threat model.** Only the 9Pay IPN webhook handler, after checksum
-  verification, may call the `increment_listing_amount()` Postgres function — the only code path
-  permitted to write `listings.amount` or `first_confirmed_at`. No other code path — including the
+- **Rank integrity is the core threat model.** Only the ZaloPay IPN webhook handler
+  (`app/api/webhooks/zalopay/route.ts`), after mac verification, may call the
+  `confirm_bid_and_increment()` Postgres function — the only code path permitted to write
+  `listings.amount` or `first_confirmed_at` (it does the bid-confirm and the amount increment in
+  one transaction, closing a crash-window gap the earlier two-separate-calls design left open — see
+  `supabase/migrations/20260826_confirm_bid_and_increment.sql`). No other code path — including the
   submit form, the `return_url` redirect handler, or any admin action — is permitted to touch these
-  fields directly, and the function itself has `EXECUTE` revoked from `anon`/`authenticated` (only
+  fields directly, and the function has `EXECUTE` revoked from `anon`/`authenticated` (only
   reachable via `service_role`, i.e. only from our own server code). Verified for real: a script
-  fired 8 concurrent RPC calls against one listing and confirmed the final amount was the exact
-  sum of all deltas — no lost update (see `scripts/verify-atomic-increment.mjs`).
+  fired 8 concurrent RPC calls against one listing via the older `increment_listing_amount()` and
+  confirmed the final amount was the exact sum of all deltas — no lost update (see
+  `scripts/verify-atomic-increment.mjs`); `scripts/verify-confirm-bid-concurrency.mjs` re-proves the
+  same property for `confirm_bid_and_increment()`.
 - **RLS is the second layer, not the only layer.** Every table has Row Level Security enabled.
   `anon`/`authenticated` get exactly three read-only policies: `categories` (all rows), `listings`
   (only `status = 'approved'`), `settings` (all rows) — needed for public pages and the submit
@@ -148,8 +160,8 @@ is excluded from analytics events and logs.
 - **Input validation:** all submission input validated server-side (zod) at the API boundary.
   Shortened URLs are resolved server-side before any validation runs; the resolved destination,
   not the shortener link, is what gets checked and stored.
-- **Payments:** no card data ever touches BidTop's servers or logs — 9Pay's hosted
-  checkout/payment-link flow only. Webhook checksum is mandatory, not optional-with-fallback.
+- **Payments:** no card data ever touches BidTop's servers or logs — ZaloPay's hosted QR/wallet
+  checkout only. IPN mac verification is mandatory, not optional-with-fallback.
 - **PII:** `submitter_email` is the only PII field; excluded from logs, analytics events, and any
   public rendering.
 - **`SUPABASE_SERVICE_ROLE_KEY` never reaches the browser.** It's read only in
@@ -181,10 +193,14 @@ is excluded from analytics events and logs.
 - **Team/timeline:** solo founder or very small team running Claude Code sessions; no fixed launch
   date was given, so the sprint plan is sequenced by dependency, not calendar. If there is a real
   deadline, compress by cutting Sprint 5 features to backlog, not by adding parallel work.
-- **9Pay API contract details** (exact field names, checksum algorithm specifics) were not
-  confirmable from public search results beyond "IPN webhook + SHA256 checksum" — must be verified
-  against the actual merchant dashboard docs during Sprint 3. Confirm whether the existing
-  ContentSuper.com 9Pay merchant account is reused or a new one is created for BidTop.vn.
+- **ZaloPay API contract** — confirmed against `developers.zalopay.vn`'s public docs (endpoint URLs,
+  field names, both HMAC-SHA256 mac formulas) and one live call to the production endpoint (which
+  returned exactly the documented response shape). Two details remain unverified pending a real
+  signed sandbox/production call (no sandbox exists for this account, so this happens against
+  production with a small real payment): the mac's exact byte encoding (assumed lowercase hex,
+  matching common VN-gateway convention) and whether `embeddata.redirecturl` controls the
+  browser-return destination per-request or it's dashboard-configured only. See
+  `lib/payment/zalopay.ts`'s top-of-file comment for the current status.
 - **VAT is not part of the ranked amount.** `listings.amount` is the pre-tax bid value shown on the
   leaderboard and used for all rank comparisons; VAT is computed and charged as a separate line
   item at checkout (`bids.vat_amount`), matching standard VN invoice practice without complicating
@@ -193,7 +209,7 @@ is excluded from analytics events and logs.
   listing's first-ever confirmed payment enters the admin queue (F8), since the content was
   already vetted and only the amount is changing.
 - **Rejected-listing refunds are manual** for MVP — the admin processes them outside the system
-  (via the 9Pay merchant dashboard directly). No refund API call is wired into BidTop.vn itself.
+  (via the ZaloPay merchant dashboard directly). No refund API call is wired into BidTop.vn itself.
 - **"N online" (F12)** is implemented via lightweight polling/heartbeat, not WebSockets — expected
   concurrency at this stage doesn't justify persistent-connection infrastructure.
 - **No third-party analytics vendor** ships in the MVP; the footer revenue counter and online count
@@ -201,8 +217,9 @@ is excluded from analytics events and logs.
 
 ## Open questions
 
-- **9Pay merchant credentials** — new account for BidTop.vn or reuse the ContentSuper.com one?
-  Resolve before Sprint 3 (blocks payment integration work).
+- **ZaloPay `getstatusbyapptransid` fallback query** — deferred, not built in Sprint 3. IPN alone
+  satisfies F6/F7's acceptance criteria; add if missed-callback cases turn out to be common enough
+  in practice to need a proactive re-query instead of relying on ZaloPay's own retries.
 - **Domain/trademark check for bidtop.vn** — confirm the domain is actually registered/available
   and there's no conflicting trademark. Resolve before Sprint 6 (launch).
 - **Legal review of "Dịch vụ pháp lý" and "Crypto, Web3 & Investing"** — not scheduled in any

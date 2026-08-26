@@ -1,15 +1,17 @@
 import { Suspense } from "react";
 import { PendingConfirm } from "./pending-confirm";
 
-// TEMPORARY — auto-fires the mock payment confirmation (see
-// app/api/payments/mock-confirm/route.ts) instead of waiting on a real gateway
-// redirect + webhook. Sprint 3 replaces this with ZaloPay's hosted checkout;
-// this page's role then reverts to display-only, per S3-T3's design.
+// Kicks off a real ZaloPay checkout session for the just-created bid, then
+// sends the browser to ZaloPay's hosted (QR/ZaloPay-wallet) payment page. This
+// page itself writes nothing to the DB — see app/api/payments/zalopay/
+// create-order/route.ts. Payment confirmation only ever comes from the IPN
+// webhook (app/api/webhooks/zalopay); the browser-return redirect after
+// payment lands on /submit/return, which is display-only for the same reason.
 export default function SubmitPendingPage() {
   return (
     <main className="mx-auto max-w-xl px-4 py-12">
-      <h1 className="text-2xl font-bold text-neutral-900">Thanh toán (giả lập)</h1>
-      <Suspense fallback={<p className="mt-2 text-neutral-500">Đang xác nhận thanh toán...</p>}>
+      <h1 className="text-2xl font-bold text-foreground">Thanh toán qua ZaloPay</h1>
+      <Suspense fallback={<p className="mt-2 text-muted-foreground">Đang chuẩn bị thanh toán...</p>}>
         <PendingConfirm />
       </Suspense>
     </main>

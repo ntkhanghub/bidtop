@@ -3,11 +3,18 @@
 Single source of truth for project status. Every session updates this file after each completed
 task; no session starts work without reading it.
 
-**Current sprint:** Sprint 5 — Public leaderboard & growth features (S5-T1 through T7, T9 done —
-awaiting user review; S5-T8 revenue counter deliberately deferred, see below).
-**Next task:** S5-T8 (revenue counter — build the query but don't surface it on the frontend yet,
-per explicit user instruction) whenever the user wants it, otherwise awaiting direction on Sprint 3
-(real ZaloPay integration, still not started) vs. Sprint 6 (hardening & launch).
+**Current sprint:** Sprint 3 — Payment integration & atomic rank engine (real ZaloPay gateway).
+**Next task:** the user needs to add `ZALOPAY_APP_ID`/`ZALOPAY_KEY1`/`ZALOPAY_KEY2` to `.env`
+(production credentials — no sandbox exists for this merchant account) before S3-T1's live
+verification can happen. All of S3-T1 (docs)/T2/T3/T4/T5's *code* is written and passes lint/
+typecheck/`npm test`/`npm run build`, but nothing has been live-verified yet: the new migration
+(`20260826_confirm_bid_and_increment.sql`) is not applied to production, no real ZaloPay payment
+has been completed, and `app/api/payments/mock-confirm/route.ts` is therefore still in place (not
+yet deleted — see Blockers). Once credentials are added: apply the migration (needs explicit user
+confirmation, same as every prior migration), push to a Vercel preview deploy, register that
+preview's `/api/webhooks/zalopay` as the ZaloPay callback URL, complete one real small payment, run
+`scripts/verify-confirm-bid-concurrency.mjs` and `scripts/verify-zalopay-idempotency.mjs`, then
+delete the mock and its call site.
 
 ## Sprint status
 
@@ -15,13 +22,98 @@ per explicit user instruction) whenever the user wants it, otherwise awaiting di
 |---|--------|--------|---------|----------|
 | 1 | Foundation | Done | 2026-08-23 | 2026-08-24 |
 | 2 | Listing submission & identity normalization | Done | 2026-08-24 | 2026-08-24 |
-| 3 | Payment integration & atomic rank engine | Not started (real gateway deferred; interim mock unblocks Sprint 4) | — | — |
+| 3 | Payment integration & atomic rank engine | In progress — code complete, live verification pending real ZaloPay credentials (see Next task) | 2026-08-26 | — |
 | 4 | Admin panel & moderation | Done | 2026-08-24 | 2026-08-24 |
 | 5 | Public leaderboard & growth features | S5-T1–T7,T9 done; T8 deferred (see task log) | 2026-08-25 | — |
 | 6 | Hardening & launch | Not started | — | — |
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-26 · Sprint 3 (S3-T1..T5) — ZaloPay integration built, NOT yet live-verified · Planned via
+  /plan mode: read `developers.zalopay.vn`'s public docs (the "Cổng ZaloPay"/Website-Gateway
+  `v001/tpe` API, not the newer wallet-only Open API) and confirmed the response field names
+  (`returncode`/`returnmessage`/`orderurl`/`zptranstoken`) for real against a live unauthenticated
+  call to the production `createorder` endpoint. Resolved 3 questions with the user first: no
+  sandbox exists for this merchant account (testing is production-only, minimized to real money
+  wherever a correctly-signed synthetic payload can substitute); webhook testing via Vercel preview
+  deploys, not a local tunnel; `bankcode` fixed to `zalopayapp` (QR/ZaloPay-wallet only, no card
+  entry — user's explicit choice) and no PII (`submitter_email`/phone/address) sent to ZaloPay
+  (`appuser` = bid id instead).
+  **New:** `lib/payment/zalopay.ts` (`buildApptransid` — VN-local-time `yymmdd_xxxx`,
+  `createZaloPayOrder`, `verifyIpnMac`, `verifyReturnChecksum` — plain `fetch` + Node's built-in
+  `crypto`, no new dependency, matching `lib/email/notify.ts`'s house style) +
+  `lib/payment/zalopay.test.ts` (self-contained fixture-key round-trip tests, not real credentials).
+  `app/api/payments/zalopay/create-order/route.ts` (starts checkout, returns `orderUrl`).
+  `app/(public)/submit/return/page.tsx` (S3-T3's display-only browser-return handler — verified
+  zero `supabase.from`/`.rpc` calls in the file). `app/api/webhooks/zalopay/route.ts` (S3-T4/T5 —
+  verifies mac before any DB call, idempotent on `bids.status`).
+  **Decided (S3-T5's explicit "decide here"):** a new combined RPC,
+  `confirm_bid_and_increment(p_bid_id, p_gateway_txn_id)`
+  (`supabase/migrations/20260826_confirm_bid_and_increment.sql`, **not yet applied**), row-locks the
+  bid and does the bid-confirm + `listings` amount increment in one transaction — closing a real
+  double-increment race the two-separate-calls pattern (still used by the temporary mock) is exposed
+  to. Included its own `grant execute ... to service_role` in the same migration, learning directly
+  from the exact bug already hit once for `increment_listing_amount()`
+  (`20260824_grant_rank_engine_execute.sql`).
+  **Changed:** `app/api/listings/submit/route.ts` now generates the real ZaloPay `apptransid`
+  (replacing the `pending-${randomUUID()}` stub) directly as `bids.gateway_order_id` at insert time.
+  `app/(public)/submit/pending/pending-confirm.tsx` rewired from auto-firing the mock to POSTing the
+  new create-order route and redirecting to `orderUrl`.
+  **New verification scripts** (same `pg`-direct-connection pattern as
+  `scripts/verify-atomic-increment.mjs`): `scripts/verify-confirm-bid-concurrency.mjs` (two
+  different bids confirmed concurrently on one listing — no lost update, replay is a no-op) and
+  `scripts/verify-zalopay-idempotency.mjs` (posts a correctly-signed synthetic IPN payload at the
+  real running webhook route twice — no real ZaloPay call needed since we hold `key2` ourselves).
+  Neither has been run yet — both need the new migration applied first, and the idempotency script
+  also needs a running dev server + `ZALOPAY_KEY2`.
+  **Spec cleanup:** every 9Pay/`NINE_PAY_*` reference across `CLAUDE.md`, `docs/specs/tech-spec.md`,
+  `docs/specs/feature-spec.md`, `docs/sprints/sprint-0{2,3,6}-*.md`, `.env.example`, and one comment
+  in `supabase/migrations/20260823_init.sql` updated to ZaloPay language (closes the deferred-rename
+  Decision below). `docs/sprints/sprint-06-hardening-launch.md`'s S6-T5 rewritten from "switch
+  sandbox→production" (never applicable here) to "re-point the ZaloPay callback URL from the Sprint
+  3 preview deploy to the final `bidtop.vn` domain."
+  **NOT done yet, blocking a real demo** (see Blockers): `ZALOPAY_APP_ID`/`KEY1`/`KEY2` aren't in
+  `.env`; the new migration isn't applied to production; no real ZaloPay payment has been completed
+  (so the `redirecturl`/mac-encoding open questions in `lib/payment/zalopay.ts`'s top comment are
+  still unresolved); `app/api/payments/mock-confirm/route.ts` and its ungated production reachability
+  are therefore still in place. Verified so far: `npm run lint`/`npm run typecheck`/`npm test`
+  (21/21, +7 new)/`npm run build` all pass.
+- 2026-08-25 · Front-end + admin UI rebuilt on shadcn/ui with a đỏ-vàng (red/gold) theme + dark
+  mode (not a sprint task — user request, following a live CSS/theme audit of outbid.lol earlier in
+  the session and an approved /plan). **Foundation**: `components.json` (new-york style, CSS
+  variables) + `npx shadcn add` for `button card badge input select alert avatar separator label
+  sonner` — the CLI wrote component source but silently failed to install their dependencies or
+  scaffold `lib/utils.ts`/`app/globals.css`'s theme block, both completed by hand
+  (`class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`, `tw-animate-css` installed
+  separately). `app/globals.css` now carries the full light+dark CSS variable set (own đỏ-vàng
+  values, outbid's variable *naming* only) plus a bidtop-specific `--live` token for the online
+  indicator. **Fonts**: swapped the requested DM Sans for **Plus Jakarta Sans** — verified directly
+  in `next/font/google`'s `font-data.json` that DM Sans has no `vietnamese` subset (only
+  `latin`/`latin-ext`), which would've broken tone-mark glyph rendering across nearly all
+  user-facing text; Plus Jakarta Sans is a variable font with a full `vietnamese` subset and a
+  similar geometric-sans feel. Geist Mono (unaffected, already has `vietnamese`) wraps every money
+  amount in `font-mono tabular-nums`. **Dark mode**: one shared `next-themes` provider
+  (`components/theme-provider.tsx`) for the whole app; the toggle (`components/theme-toggle.tsx`)
+  renders only in the public header — admin has no toggle but still follows whatever theme is
+  active, per user decision. **Scope**: all 22 existing page/component files reskinned (Button/
+  Card/Badge/Input/Select/Alert/Avatar), plus new status-color badges in admin (none existed
+  before: approved→`--live` green, rejected→destructive red, pending→accent gold, unpublished→
+  muted). Field-level validation errors deliberately kept as plain inline text (not Alert/toast) —
+  CLAUDE.md's existing, explicit convention. One deliberate deviation from the plan: the admin
+  listings search/filter bar stayed a native zero-JS `<select>`/GET-form (hand-styled to match, not
+  swapped to Radix `Select`) since Radix's Select can't drive native form submission the same way
+  and the existing bookmarkable-URL filtering wasn't broken. Caught and fixed one real bug: the new
+  `react-hooks` ESLint rule flagged the standard next-themes mount-detection `useEffect` pattern as
+  a cascading-render risk — rewrote `useMounted()` with `useSyncExternalStore` instead. Verified:
+  lint/typecheck/`npm test`(14/14)/`npm run build` all pass; live in-browser against the real
+  Supabase DB (not mocks) — homepage light+dark (colors/fonts/radius all confirmed via computed
+  styles matching the palette exactly), submit form's Select + below-minimum validation error
+  (confirmed inline, not toast, correct `--destructive` color), admin queue/listings/settings pages
+  under a real `super_admin` session (status badge colors, native filter form, empty states, sonner
+  toast theming) — all with zero console errors. Pixel screenshots weren't available this session
+  (Browser pane wasn't displayed client-side), so verification relied on computed-style assertions
+  and DOM/accessibility-tree inspection instead — noted to the user as a real limitation, not
+  skipped.
 - 2026-08-25 · Sprint 5 done except S5-T8 (S5-T1 through T7, T9) · Planned via /plan mode: confirmed
   F2/F3/F11/F12/F13/F14 have no acceptance-criteria section anywhere in feature-spec.md (only the
   sprint file's own task descriptions specify them), designed the 3 missing data models from
@@ -224,6 +316,29 @@ per explicit user instruction) whenever the user wants it, otherwise awaiting di
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
+- 2026-08-26 · Sprint 3 ships against ZaloPay's production API directly, no sandbox toggle in code
+  · user confirmed only a production ZaloPay Gateway account exists for this merchant, no separate
+  sandbox credentials. Adding a `ZALOPAY_ENV`/sandbox-vs-production env toggle would be speculative
+  complexity for an environment that doesn't exist for this account (CLAUDE.md's simplicity-first
+  principle) — trivial to add back if sandbox access is ever obtained.
+- 2026-08-26 · ZaloPay checkout is QR/ZaloPay-wallet only (`bankcode="zalopayapp"`, fixed, not a
+  runtime setting) · user's explicit choice over showing every supported bank/card option
+  (`bankcode=""`). One-line change in `lib/payment/zalopay.ts` if card payment is wanted later.
+- 2026-08-26 · No PII sent to ZaloPay's `createorder` call — `appuser` is the bid's own id, not
+  `submitter_email`; `email`/`phone`/`address` fields left empty · user's explicit choice, matching
+  CLAUDE.md's conservative existing stance on `submitter_email`.
+- 2026-08-26 · `confirm_bid_and_increment()` (new combined RPC) replaces the two-separate-calls
+  pattern for the real webhook — see the 2026-08-26 task log entry above for the race it closes.
+  `increment_listing_amount()` stays in place (additive-only), used only by the temporary mock until
+  it's deleted.
+- 2026-08-26 · Webhook testing during development uses a Vercel preview deploy's public URL
+  (registered temporarily as the ZaloPay callback URL), not a local tunnel · user's explicit choice;
+  simpler than installing/running ngrok or similar, and this repo already deploys to Vercel on every
+  push.
+- 2026-08-26 · **Supersedes/closes** the 2026-08-24 "9Pay→ZaloPay rename deliberately deferred until
+  Sprint 3 begins" decision below — Sprint 3 has now begun; every 9Pay/`NINE_PAY_*` reference in
+  CLAUDE.md/tech-spec.md/feature-spec.md/the sprint files/.env.example has been updated (see the
+  2026-08-26 task log entry).
 - 2026-08-25 · "N online" (F12) stays self-built (Postgres heartbeat table), no third-party vendor
   · user initially wanted Vemetric.com; verified via their real API docs that they have no
   purpose-built live-count endpoint (only historical/windowed analytics queries) and integrating
@@ -349,11 +464,18 @@ reflected back into the spec file. -->
   gracefully falls back to `"other"` without it, and F5's design already treats classifier
   correctness as non-critical since admin corrects it at approval), but should be resolved before
   trusting the suggestion quality in a real demo.
-- ZaloPay merchant credentials/account not yet set up — must resolve before Sprint 3's S3-T1 (was
-  the 9Pay version of this same open question; moot now per the gateway-switch Decision above).
-- The mock payment step (`app/api/payments/mock-confirm/`) is live in production and always
-  "succeeds" with no real charge — a real free-rank exploit until Sprint 3 replaces it with the
-  ZaloPay webhook. Must not be forgotten before any real launch/marketing push.
+- **`ZALOPAY_APP_ID`/`ZALOPAY_KEY1`/`ZALOPAY_KEY2` not yet in `.env`** — the user has registered a
+  ZaloPay Gateway merchant account but hasn't added the credentials to `.env` yet (add them
+  directly, not pasted into chat, per CLAUDE.md's secrets rule). Blocks S3-T1's live verification
+  and every other live-verification step in Sprint 3's Next task above.
+- **`supabase/migrations/20260826_confirm_bid_and_increment.sql` written but not applied** to the
+  production DB — needs `DIRECT_URL` (already set) and explicit user confirmation before running,
+  same as every prior migration in this project.
+- The mock payment step (`app/api/payments/mock-confirm/`) is still live in production and always
+  "succeeds" with no real charge — a real free-rank exploit until Sprint 3's real flow is
+  live-verified and this file is deleted (its call site in `pending-confirm.tsx` is already rewired
+  to the real flow, but the mock endpoint itself is still reachable). Must not be forgotten before
+  any real launch/marketing push.
 - bidtop.vn domain/trademark availability not yet confirmed — must resolve before Sprint 6.
 - Legal review of "Dịch vụ pháp lý" and "Crypto, Web3 & Investing" categories not started — both
   stay out of the product indefinitely until done (no sprint assigned).

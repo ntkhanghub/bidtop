@@ -30,8 +30,9 @@ create table listings (
   display_url text not null,
   category_id uuid not null references categories (id),
   status listing_status not null default 'draft',
-  -- Only increment_listing_amount() (called only from the 9Pay webhook handler,
-  -- via service_role) may change this — see CLAUDE.md Safety rules.
+  -- Only increment_listing_amount() or confirm_bid_and_increment() (called only
+  -- from the ZaloPay webhook handler, via service_role) may change this — see
+  -- CLAUDE.md Safety rules.
   amount integer not null default 0,
   -- Set once, on this listing's first confirmed payment. Never updated by a later
   -- top-up. Used as the leaderboard tie-break (ORDER BY amount DESC, first_confirmed_at ASC).
