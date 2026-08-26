@@ -18,7 +18,7 @@ export default async function SubmitReturnPage({
   const copy = {
     success: {
       title: "Đã ghi nhận thanh toán",
-      body: "SePay báo thanh toán thành công. Hệ thống đang xác nhận — vị trí của bạn sẽ cập nhật trong giây lát.",
+      body: "SePay báo thanh toán thành công. Admin đang duyệt. Link và vị trí của bạn sẽ cập nhật trong khoảng thời gian từ 15 phút đến 24h tới.",
     },
     error: {
       title: "Thanh toán không thành công",

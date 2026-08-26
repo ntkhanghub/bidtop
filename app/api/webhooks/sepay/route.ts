@@ -9,7 +9,11 @@ const orderPaidSchema = z.object({
   notification_type: z.literal("ORDER_PAID"),
   order: z.object({
     order_invoice_number: z.string(),
-    order_amount: z.number(),
+    // Real payloads send this as a string ("5000"), not a number as SePay's
+    // public docs claimed ("long") — confirmed via a live Vercel log capture
+    // after every prior fix attempt still failed. z.coerce handles both
+    // shapes so it doesn't matter which SePay sends going forward.
+    order_amount: z.coerce.number(),
   }),
   transaction: z.object({
     id: z.union([z.string(), z.number()]).optional(),

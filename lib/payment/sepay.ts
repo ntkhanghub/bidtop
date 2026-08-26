@@ -14,13 +14,18 @@ import { SePayPgClient } from "sepay-pg-node";
 // app/(public)/submit/pending/pending-confirm.tsx.
 //
 // IPN auth is a shared-secret header (X-Secret-Key), not an HMAC-signed body
-// like ZaloPay's — verified against developer.sepay.vn/en/cong-thanh-toan/IPN.
-// Still unverified pending real dashboard access: whether X-Secret-Key is
-// really the only configured IPN auth option, the exact `currency` value
-// expected (assumed "VND"), whether SePay retries on a non-200 IPN response
-// at all, and whether `transaction.id` or `transaction.transaction_id` is the
-// right field for gateway_txn_id — confirm all of these against one real
-// sandbox payment before trusting this in production.
+// like ZaloPay's — verified against developer.sepay.vn/en/cong-thanh-toan/IPN,
+// and confirmed for real via a live production payload (2026-08-26): the
+// merchant dashboard's "Cấu hình IPN" screen really does offer an Auth Type
+// choice ("Không có" vs "Secret Key") — it must be set to "Secret Key" and
+// the value must exactly match SEPAY_SECRET_KEY, or every delivery 401s
+// silently (checkout still looks successful to the payer either way, since
+// success_url fires independently of IPN success). Also confirmed for real:
+// `order.order_amount` arrives as a STRING (e.g. "5000"), not a number as the
+// public docs claimed ("long") — app/api/webhooks/sepay/route.ts coerces it.
+// Still unverified: whether SePay retries on a non-200 IPN response at all,
+// and whether `transaction.id` or `transaction.transaction_id` is the more
+// meaningful field for gateway_txn_id (both are populated in practice).
 //
 // payment_method fixed to "BANK_TRANSFER" (QR chuyển khoản ngân hàng only, no
 // card) — the user's explicit choice, see PROGRESS.md Decisions. A real
