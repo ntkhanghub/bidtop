@@ -11,11 +11,16 @@ const ipnDataSchema = z.object({
   zptransid: z.union([z.number(), z.string()]),
 });
 
-// The ONLY place (besides the temporary app/api/payments/mock-confirm, being
-// deleted this sprint) allowed to call confirm_bid_and_increment() — see
-// CLAUDE.md's rank-integrity rule. Mac is verified before any DB call; the
-// response codes below follow ZaloPay's documented ack contract
-// (1 = success/stop retrying, 0 = retry, anything else = failure).
+// CURRENTLY UNWIRED — ZaloPay is paused in favor of SePay (see
+// lib/payment/sepay.ts, app/api/webhooks/sepay/route.ts, PROGRESS.md
+// Decisions); no ZaloPay callback URL is registered anywhere right now. Kept
+// intact, still correct (mac verification still gates every write), ready to
+// re-wire if ZaloPay is reactivated.
+//
+// Allowed to call confirm_bid_and_increment() — see CLAUDE.md's
+// rank-integrity rule. Mac is verified before any DB call; the response
+// codes below follow ZaloPay's documented ack contract (1 = success/stop
+// retrying, 0 = retry, anything else = failure).
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

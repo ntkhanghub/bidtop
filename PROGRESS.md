@@ -3,18 +3,20 @@
 Single source of truth for project status. Every session updates this file after each completed
 task; no session starts work without reading it.
 
-**Current sprint:** Sprint 3 — Payment integration & atomic rank engine (real ZaloPay gateway).
-**Next task:** the user needs to add `ZALOPAY_APP_ID`/`ZALOPAY_KEY1`/`ZALOPAY_KEY2` to `.env`
-(production credentials — no sandbox exists for this merchant account) before S3-T1's live
-verification can happen. All of S3-T1 (docs)/T2/T3/T4/T5's *code* is written and passes lint/
-typecheck/`npm test`/`npm run build`, but nothing has been live-verified yet: the new migration
-(`20260826_confirm_bid_and_increment.sql`) is not applied to production, no real ZaloPay payment
-has been completed, and `app/api/payments/mock-confirm/route.ts` is therefore still in place (not
-yet deleted — see Blockers). Once credentials are added: apply the migration (needs explicit user
-confirmation, same as every prior migration), push to a Vercel preview deploy, register that
-preview's `/api/webhooks/zalopay` as the ZaloPay callback URL, complete one real small payment, run
-`scripts/verify-confirm-bid-concurrency.mjs` and `scripts/verify-zalopay-idempotency.mjs`, then
-delete the mock and its call site.
+**Current sprint:** Sprint 3 — Payment integration & atomic rank engine (active gateway: **SePay**;
+ZaloPay built first, then paused — see Decisions).
+**Next task:** the user completed a sandbox checkout end-to-end (SePay's page, real payment), but the
+underlying bid was never confirmed — caught via a live DB check (see 2026-08-26 task log entry
+below): the `confirm_bid_and_increment` migration had never been applied, so every real IPN delivery
+was 500ing at the RPC call. **Migration is now applied** (with the user's explicit confirmation) and
+verified live via `scripts/verify-confirm-bid-concurrency.mjs` (no lost update, replay is a no-op).
+**Still needed before trusting production:** re-run one real SePay sandbox payment now that the fix
+is live, to confirm the FULL path (SePay → IPN → webhook → RPC) actually flips a bid to `confirmed`
+and increments `listings.amount` — the concurrency script only proved the RPC itself, not the
+webhook route/IPN delivery end-to-end. Once that's confirmed: switch `SEPAY_ENV=production` +
+production `SEPAY_MERCHANT_ID`/`SEPAY_SECRET_KEY` in Vercel, register the production domain's
+`/api/webhooks/sepay` as the IPN URL in SePay's dashboard, do one real small production payment,
+then delete `app/api/payments/mock-confirm/route.ts` (already orphaned, not yet deleted).
 
 ## Sprint status
 
@@ -22,13 +24,75 @@ delete the mock and its call site.
 |---|--------|--------|---------|----------|
 | 1 | Foundation | Done | 2026-08-23 | 2026-08-24 |
 | 2 | Listing submission & identity normalization | Done | 2026-08-24 | 2026-08-24 |
-| 3 | Payment integration & atomic rank engine | In progress — code complete, live verification pending real ZaloPay credentials (see Next task) | 2026-08-26 | — |
+| 3 | Payment integration & atomic rank engine | In progress — SePay code complete, live verification pending sandbox credentials (see Next task); ZaloPay built first, now paused | 2026-08-26 | — |
 | 4 | Admin panel & moderation | Done | 2026-08-24 | 2026-08-24 |
 | 5 | Public leaderboard & growth features | S5-T1–T7,T9 done; T8 deferred (see task log) | 2026-08-25 | — |
 | 6 | Hardening & launch | Not started | — | — |
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-26 · Caught + fixed a real bug: the SePay rank-confirmation migration was never applied ·
+  User completed a sandbox checkout (real SePay payment, redirected to the success page) and reported
+  it as a successful test. A read-only DB check (querying `bids` directly) showed the 5 most recent
+  test bids were ALL still `status: 'pending'`/`confirmed_at: null` — none had actually been
+  confirmed. Root cause, confirmed via `pg_proc`: `confirm_bid_and_increment()` had never been applied
+  to the database (the migration file existed but `apply-migration.mjs` was never run against it), so
+  every real IPN delivery from SePay verified its signature correctly, then 500'd on the RPC call
+  ("function does not exist") — invisibly, since SePay's `success_url` redirect fires independently
+  of whether our webhook actually succeeds, so the checkout UX looked fine while the core rank-write
+  silently failed every time. Applied the migration with the user's explicit confirmation
+  (`node scripts/apply-migration.mjs supabase/migrations/20260826_confirm_bid_and_increment.sql`);
+  confirmed the function now exists and re-ran `scripts/verify-confirm-bid-concurrency.mjs` live
+  against production — 2 concurrent confirmations summed correctly (no lost update), and a replayed
+  confirmation was confirmed as a no-op. **Not yet re-verified end-to-end through the real webhook
+  route** (the concurrency script calls the RPC directly, not via SePay/HTTP) — see Next task above.
+- 2026-08-26 · ZaloPay paused, SePay built as the active gateway — NOT yet live-verified · While the
+  user was testing the ZaloPay flow on Vercel (below), `/api/payments/zalopay/create-order` 500'd —
+  root-caused to `requireEnv()` throwing outside any try/catch when an env var was missing (likely
+  the ZaloPay env vars weren't yet added to Vercel's own project settings, separate from local
+  `.env`); fixed by wrapping `createZaloPayOrder`/`verifyIpnMac`/`verifyReturnChecksum` in try/catch
+  so a config error returns a clean error instead of an unhandled 500. Before finishing ZaloPay's
+  live verification, the user asked to temporarily pause ZaloPay ("tạm disable" — keep the code,
+  don't delete it) and build **SePay's Payment Gateway** as the active method instead, via the
+  official `sepay-pg-node` npm SDK. Planned via /plan mode: read the package's real shipped source
+  (v1.0.0, MIT, `github.com/sepayvn/sepay-pg-node`) via unpkg rather than trusting only its README,
+  and fetched `developer.sepay.vn`'s real payment-gateway docs (a separate docs site from
+  `docs.sepay.vn`, which covers SePay's other bank-webhook product) for the IPN contract. Confirmed
+  a real sandbox exists for this merchant account (`my.sepay.vn`, no production-approval wait) —
+  unlike ZaloPay, so this integration can be fully live-verified before touching production.
+  **New:** `npm install sepay-pg-node` (real dependency, not hand-rolled — see Decisions).
+  `lib/payment/order-id.ts` — `buildGatewayOrderId()`, extracted from `zalopay.ts`'s
+  `buildApptransid` (mechanical rename/move, same logic) since it's genuinely gateway-agnostic and
+  now has two consumers; its tests moved to `order-id.test.ts`. `lib/payment/sepay.ts` —
+  `createSepayCheckout()` (wraps `SePayPgClient.checkout`, `payment_method` fixed to
+  `BANK_TRANSFER`, entire body in try/catch from the start — applying the ZaloPay 500 bug's lesson
+  immediately) and `verifySepayIpnSecret()` (constant-time `X-Secret-Key` header compare) + tests.
+  `app/api/payments/sepay/create-order/route.ts` (returns `{checkoutUrl, fields}`, not a bare
+  `orderUrl` — SePay's checkout is a browser FORM POST, not a redirect). `app/api/webhooks/sepay/
+  route.ts` (verifies the secret before any DB call, real HTTP status codes — 401/400/500 — instead
+  of ZaloPay's always-200-with-body-code, since SePay only documents "HTTP 200 required" with no
+  alternate convention; calls the SAME `confirm_bid_and_increment()` RPC as ZaloPay would have — no
+  new migration needed, it was already gateway-agnostic). `scripts/verify-sepay-idempotency.mjs`
+  (same `pg`-direct fixture pattern as the ZaloPay version, `X-Secret-Key` instead of a mac).
+  **Changed:** `app/(public)/submit/pending/pending-confirm.tsx` rewritten for the form-POST flow
+  (fetches signed fields, renders a hidden auto-submitting `<form>` with a manual fallback button —
+  a real UX difference from ZaloPay's `location.href = orderUrl`). `app/(public)/submit/return/
+  page.tsx` redesigned around an `?outcome=success|error|cancel` param BidTop itself chooses when
+  building the checkout's `success_url`/`error_url`/`cancel_url`, instead of parsing ZaloPay's old
+  checksummed query params (which are undocumented for SePay's redirect anyway) — still zero DB
+  writes. `app/api/listings/submit/route.ts`'s import swapped to the new shared generator.
+  **Orphaned, not deleted:** `lib/payment/zalopay.ts` (minus the moved `buildApptransid`),
+  `app/api/payments/zalopay/create-order/route.ts`, `app/api/webhooks/zalopay/route.ts` — all still
+  compile, still pass their own tests, one-line "currently unwired" comment added to each. No
+  feature flag introduced (CLAUDE.md forbids them pre-launch) — "disable" is un-wiring the two call
+  sites, nothing more.
+  **NOT done yet, blocking a real demo** (see Blockers): `SEPAY_MERCHANT_ID`/`SEPAY_SECRET_KEY`
+  aren't in `.env`; the migration isn't applied to production; no real SePay sandbox payment has
+  been completed (so the `X-Secret-Key`-is-the-only-option/`currency`-value/retry-semantics/
+  `transaction.id`-vs-`transaction_id` open questions in `lib/payment/sepay.ts`'s top comment are
+  still unresolved); `mock-confirm`/route.ts is still in place (already orphaned, not yet deleted).
+  Verified so far: `npm run lint`/`npm run typecheck`/`npm test` (26/26, +5 new)/`npm run build` all
+  pass; grep confirms `/submit/return` still has zero `supabase.from`/`.rpc` calls.
 - 2026-08-26 · Sprint 3 (S3-T1..T5) — ZaloPay integration built, NOT yet live-verified · Planned via
   /plan mode: read `developers.zalopay.vn`'s public docs (the "Cổng ZaloPay"/Website-Gateway
   `v001/tpe` API, not the newer wallet-only Open API) and confirmed the response field names
@@ -316,6 +380,44 @@ delete the mock and its call site.
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
+- 2026-08-26 · **ZaloPay paused ("tạm disable"), SePay is now the active payment gateway** · user's
+  explicit request, before ZaloPay's own live verification finished. "Disable" = un-wiring the two
+  call sites (`pending-confirm.tsx`, `submit/route.ts`'s import) — no feature flag introduced
+  (CLAUDE.md forbids them pre-launch: "change the code directly"). ZaloPay's files (`lib/payment/
+  zalopay.ts`, both its routes, its env vars) stay fully intact, still tested, still correctly
+  gated — orphaned, not deleted. Re-enabling later is a 2-line change.
+- 2026-08-26 · `sepay-pg-node` added as a real npm dependency, used directly (not hand-rolled like
+  ZaloPay's mac) · this repo already has a precedent for real vendor SDKs (`@anthropic-ai/sdk`);
+  SePay's checkout signing is security-sensitive, not the ~20-line plain-fetch case CLAUDE.md's
+  "no new dependency" rule is aimed at; and unlike ZaloPay there's no way to unauthenticated-probe
+  SePay's checkout endpoint to sanity-check a hand-rolled signature, so a subtly-wrong field
+  whitelist/order would be much harder to catch than it was for ZaloPay's mac.
+- 2026-08-26 · `buildApptransid` extracted from `zalopay.ts` to a new gateway-neutral
+  `lib/payment/order-id.ts` (`buildGatewayOrderId`) · `bids.gateway_order_id` was always
+  gateway-agnostic in the schema and now has two real consumers (SePay, and ZaloPay if
+  re-enabled) — mechanical move, same VN-local-time `yymmdd_xxxxxxxx` logic, no redesign.
+- 2026-08-26 · SePay checkout is QR chuyển khoản ngân hàng only (`payment_method="BANK_TRANSFER"`,
+  fixed, not a runtime setting) · user's explicit choice, mirroring the ZaloPay QR-only precedent
+  over showing Card/QR Banking/QR NAPAS together.
+- 2026-08-26 · `SEPAY_ENV` fails safe to `"sandbox"` if unset, unlike ZaloPay which had no
+  sandbox/production toggle at all (no sandbox existed for that account) · a real sandbox DOES
+  exist for this SePay merchant account, so the toggle is genuinely useful — but forgetting to set
+  `SEPAY_ENV=production` on Vercel should mean "checkout silently stays sandbox," not "accidentally
+  goes live."
+- 2026-08-26 · `/submit/return` redesigned around an `?outcome=success|error|cancel` param BidTop
+  itself chooses (via the `success_url`/`error_url`/`cancel_url` built at checkout time), not
+  gateway-supplied query data · SePay uses 3 separate redirect URLs (unlike ZaloPay's one URL +
+  status param) and its redirect query-param shape isn't documented anywhere found — since the page
+  already performs zero DB writes either way (purely cosmetic), choosing our own discriminator
+  sidesteps needing to trust or parse anything gateway-supplied at all.
+- 2026-08-26 · SePay's IPN webhook uses real HTTP status codes (401/400/500) rather than ZaloPay's
+  always-200-with-body-code convention · SePay's docs only document "must return HTTP 200 to
+  confirm receipt," with no alternate body-code contract like ZaloPay's `returncode` — matching
+  what's actually documented rather than assuming ZaloPay's pattern carries over.
+- 2026-08-26 · No new migration for SePay — reuses `confirm_bid_and_increment(p_bid_id,
+  p_gateway_txn_id text)` from the ZaloPay work as-is · confirmed the function was already 100%
+  gateway-agnostic (`p_gateway_txn_id` is just an opaque string); both gateways' webhooks call the
+  exact same function.
 - 2026-08-26 · Sprint 3 ships against ZaloPay's production API directly, no sandbox toggle in code
   · user confirmed only a production ZaloPay Gateway account exists for this merchant, no separate
   sandbox credentials. Adding a `ZALOPAY_ENV`/sandbox-vs-production env toggle would be speculative
@@ -464,18 +566,38 @@ reflected back into the spec file. -->
   gracefully falls back to `"other"` without it, and F5's design already treats classifier
   correctness as non-critical since admin corrects it at approval), but should be resolved before
   trusting the suggestion quality in a real demo.
-- **`ZALOPAY_APP_ID`/`ZALOPAY_KEY1`/`ZALOPAY_KEY2` not yet in `.env`** — the user has registered a
-  ZaloPay Gateway merchant account but hasn't added the credentials to `.env` yet (add them
-  directly, not pasted into chat, per CLAUDE.md's secrets rule). Blocks S3-T1's live verification
-  and every other live-verification step in Sprint 3's Next task above.
-- **`supabase/migrations/20260826_confirm_bid_and_increment.sql` written but not applied** to the
-  production DB — needs `DIRECT_URL` (already set) and explicit user confirmation before running,
-  same as every prior migration in this project.
+- **SePay sandbox `SEPAY_MERCHANT_ID`/`SEPAY_SECRET_KEY` are in place** (user completed a sandbox
+  checkout) — resolved. Production credentials are a separate pair, not yet needed until the
+  end-to-end re-verification below passes and production cutover actually starts.
+- **ZaloPay credentials question is now moot while paused** — `ZALOPAY_APP_ID`/`KEY1`/`KEY2` were
+  never added to `.env`/Vercel either; not a blocker unless ZaloPay is reactivated.
+- **Real webhook path not yet re-verified end-to-end since the migration was applied** — the
+  concurrency script proved the RPC itself works, but the actual SePay→IPN→`/api/webhooks/sepay`
+  path hasn't been re-tested since the fix (the one real payment the user completed happened while
+  the migration was still missing, so it never got past the RPC-call step) — see 2026-08-26 task log
+  entries and Next task above. Do one more real sandbox payment before trusting this in production.
+- **Unverified SePay facts, resolvable with the re-verification above**: whether `X-Secret-Key` is
+  really the only configured IPN auth option; the exact `currency` value expected (assumed `"VND"`);
+  whether SePay retries on a non-200 IPN response at all; whether `transaction.id` or
+  `transaction.transaction_id` is the right field for `gateway_txn_id`.
 - The mock payment step (`app/api/payments/mock-confirm/`) is still live in production and always
-  "succeeds" with no real charge — a real free-rank exploit until Sprint 3's real flow is
-  live-verified and this file is deleted (its call site in `pending-confirm.tsx` is already rewired
-  to the real flow, but the mock endpoint itself is still reachable). Must not be forgotten before
-  any real launch/marketing push.
+  "succeeds" with no real charge — a real free-rank exploit until the real (now SePay) flow is
+  live-verified end-to-end and this file is deleted (its call site in `pending-confirm.tsx` is
+  already rewired to the real flow, but the mock endpoint itself is still reachable). Must not be
+  forgotten before any real launch/marketing push.
 - bidtop.vn domain/trademark availability not yet confirmed — must resolve before Sprint 6.
 - Legal review of "Dịch vụ pháp lý" and "Crypto, Web3 & Investing" categories not started — both
   stay out of the product indefinitely until done (no sprint assigned).
+- **"QR tĩnh" (ZaloPay static QR) — explicitly delayed by the user (2026-08-26), not in scope for
+  now.** Research so far: it's a separate ZaloPay product (Merchant Console, `mc.zalopay.vn`/
+  `sbmc.zalopay.vn`) from the Gateway API (`v001/tpe`) Sprint 3 uses; the callback URL the user
+  provided (`qrpay.zalopay.vn/merchant/shop/callback`) 404s and no public API docs exist for
+  querying/receiving static-QR transaction results. A real design blocker also surfaced: static QR
+  has no per-transaction order reference, so confirming a payment would need either amount+time
+  matching (still ambiguous under concurrent same-amount bids) or admin manual confirmation — the
+  user leaned toward manual admin confirmation (reasoning: admin already reviews every new listing
+  before publish, so reviewing the payment too is consistent) but this needs an explicit, deliberate
+  carve-out in CLAUDE.md's rank-integrity rule ("no admin action may increment amount directly")
+  before building it, since it's a permanent exception, not a temporary one like mock-confirm. User
+  was about to check `mc.zalopay.vn` for a real webhook/API before this got paused — pick that back
+  up when resuming.

@@ -22,7 +22,7 @@ than an ORM — see Assumptions for why this changed mid-project from an initial
 | Notifications | Toast (sonner) | transient feedback for payment status, admin actions, settings saves — see Conventions in CLAUDE.md for when to use toast vs. inline field errors |
 | Database | PostgreSQL (Supabase, Singapore region) | relational fits the listings/bids ledger; row-level locking on `UPDATE` is what makes the rank engine race-safe for free; Singapore region keeps latency low for VN traffic; managed dashboard/table editor is useful for a solo founder debugging data directly |
 | Data access | `@supabase/supabase-js` (server-only, service role) + hand-written raw SQL migrations in `supabase/migrations/` | user's explicit choice over an ORM. Schema is managed as plain SQL, applied via a small local script (`scripts/apply-migration.mjs`) against the direct connection — not the Supabase CLI, which would need an interactive login this team can't do headlessly. Row types are hand-written (`lib/supabase/database.types.ts`) rather than CLI-generated, for the same reason |
-| Payment | ZaloPay (Gateway API, `v001/tpe`) | user's explicit choice, see PROGRESS.md Decisions; IPN webhook + HMAC-SHA256 checksum model fits the "rank only after webhook" requirement. QR/ZaloPay-wallet only (`bankcode=zalopayapp`); no sandbox for this merchant account, so all calls go to production |
+| Payment | SePay Payment Gateway (`sepay-pg-node` SDK) — **active**; ZaloPay (Gateway API, `v001/tpe`) — **paused**, kept intact | user's explicit choice to pause ZaloPay in favor of SePay before a real payment happened, see PROGRESS.md Decisions; both use an IPN webhook + signature/secret model fitting "rank only after webhook." SePay checkout is a browser form-POST (not a redirect URL); QR chuyển khoản ngân hàng only. A real sandbox exists for SePay (unlike ZaloPay, which is production-only) |
 | Hosting | Vercel | zero-ops for a solo/small team; serverless functions handle the webhook endpoint fine at this traffic scale |
 | Category classification | LLM call (Claude Haiku) at submission time | cheap, no training data needed; accuracy is not launch-critical because admin corrects it at approval (F8) |
 | Admin auth | Session cookie + hashed password (argon2id), two roles (`admin`, `super_admin`) | small, fixed set of admin accounts — no need for a managed auth provider |
@@ -35,12 +35,12 @@ Visitor ──GET──▶ / , /category/[slug]  ──▶ Next.js SSR/ISR ─�
 Submitter ─POST─▶ /submit ──▶ normalize + validate ──▶ draft listing + pending bid row
                                     │                              │
                                     ▼                              ▼
-                       ZaloPay createorder (QR/wallet)   ZaloPay redirects submitter
+                    SePay checkout (form-POST, bank QR)   SePay redirects submitter
                                     │                     to /submit/return (display-only,
-                                    ▼                      writes nothing)
-                       ZaloPay IPN callback ──POST──▶ /api/webhooks/zalopay
+                                    ▼                      writes nothing — outcome param
+                    SePay IPN callback ──POST──▶ /api/webhooks/sepay   we chose ourselves)
                                                             │
-                                              verify HMAC mac + idempotency
+                                        verify X-Secret-Key + idempotency
                                                             │
                           supabase.rpc('confirm_bid_and_increment', ...)
                           — bid-confirm + amount UPDATE in one Postgres function/transaction
@@ -50,13 +50,17 @@ Submitter ─POST─▶ /submit ──▶ normalize + validate ──▶ draft l
                                                             │
 Admin ──▶ /admin (session auth) ──▶ approve/reject queue, settings (super_admin only)
 
+(ZaloPay's equivalent flow — app/api/payments/zalopay/create-order,
+app/api/webhooks/zalopay — is paused/unwired, same shape, kept intact. See
+PROGRESS.md Decisions.)
+
 (No browser ever holds a Supabase credential. NEXT_PUBLIC_SUPABASE_ANON_KEY is
 configured but unused — RLS grants it read-only access to categories/approved
 listings/settings and nothing else; nothing in the app calls it client-side yet.)
 ```
 
 No queue, no background worker: webhook volume is low enough that a synchronous transaction inside
-the serverless function is sufficient. Revisit only if ZaloPay retries or traffic spikes cause
+the serverless function is sufficient. Revisit only if SePay retries or traffic spikes cause
 timeouts.
 
 ## Data model
@@ -86,17 +90,29 @@ is excluded from analytics events and logs.
 
 ## External integrations
 
-- **ZaloPay Gateway (`v001/tpe`)** — `POST https://zalopay.com.vn/v001/tpe/createorder`
-  (`application/x-www-form-urlencoded`) creates a checkout session; `orderurl` in the response is
-  where the submitter is redirected (QR/ZaloPay-wallet only, `bankcode=zalopayapp`). Payment
-  confirmation arrives via a server-to-server IPN callback (URL registered once in the ZaloPay
-  merchant dashboard, not a per-request field) — `POST /api/webhooks/zalopay` — carrying
-  `{ data, mac }` where `mac = HMAC_SHA256(key2, data)`; the browser-return redirect
-  (`/submit/return`) carries a separate 7-field HMAC-SHA256 checksum (also `key2`) and is
-  display-only. Auth: `ZALOPAY_APP_ID`, `ZALOPAY_KEY1` (signs outbound requests), `ZALOPAY_KEY2`
-  (verifies inbound callback + return checksum) — see `lib/payment/zalopay.ts`. No sandbox exists
-  for this merchant account; all calls go to production. Verify the mac on every inbound webhook
-  call before any DB access.
+- **SePay Payment Gateway** (**active**) — via the official `sepay-pg-node` npm SDK
+  (`SePayPgClient`). Checkout is a browser FORM POST to `{baseCheckoutUrl}/v1/checkout/init`
+  (sandbox `pay-sandbox.sepay.vn`, production `pay.sepay.vn`) with HMAC-SHA256-base64-signed fields
+  (`signature = HMAC_SHA256(secret_key, whitelisted "field=value" pairs).digest('base64')`);
+  `payment_method` fixed to `BANK_TRANSFER` (QR chuyển khoản ngân hàng only). Payment confirmation
+  arrives via a server-to-server IPN (URL registered once in the SePay merchant dashboard, not a
+  per-request field) — `POST /api/webhooks/sepay` — authenticated via an `X-Secret-Key` header
+  (exact-match against `SEPAY_SECRET_KEY`, not an HMAC-signed body); body carries
+  `{ notification_type: "ORDER_PAID", order: {...}, transaction: {...} }`. The browser-return
+  redirect (`/submit/return?outcome=...`) uses an outcome discriminator BidTop itself chooses when
+  building the checkout's `success_url`/`error_url`/`cancel_url` — never SePay-supplied query data —
+  and is display-only. Auth: `SEPAY_MERCHANT_ID`, `SEPAY_SECRET_KEY`, `SEPAY_ENV` (real sandbox
+  exists for this merchant account, unlike ZaloPay) — see `lib/payment/sepay.ts`. Verify the
+  X-Secret-Key on every inbound IPN before any DB access.
+- **ZaloPay Gateway (`v001/tpe`)** (**paused** — "tạm disable," user's explicit call, superseded by
+  SePay before a real payment happened; kept fully intact for re-enabling) — `POST
+  https://zalopay.com.vn/v001/tpe/createorder` (`application/x-www-form-urlencoded`) creates a
+  checkout session; `orderurl` in the response is where the submitter is redirected (QR/ZaloPay-wallet
+  only, `bankcode=zalopayapp`). Payment confirmation would arrive via `POST /api/webhooks/zalopay`
+  carrying `{ data, mac }` where `mac = HMAC_SHA256(key2, data)`. Auth: `ZALOPAY_APP_ID`,
+  `ZALOPAY_KEY1`, `ZALOPAY_KEY2` — see `lib/payment/zalopay.ts`. No sandbox exists for this merchant
+  account. Not currently registered with any callback URL — reactivating requires re-wiring the two
+  call sites (see PROGRESS.md Decisions) and re-registering the IPN URL.
 - **Claude API (Haiku)** — one-shot category classification at submission time. Auth: env
   `ANTHROPIC_API_KEY`. Submitted content is untrusted input — never interpolate raw scraped page
   content into a system prompt with instructions in it.
@@ -127,17 +143,19 @@ is excluded from analytics events and logs.
 
 ## Security considerations
 
-- **Rank integrity is the core threat model.** Only the ZaloPay IPN webhook handler
-  (`app/api/webhooks/zalopay/route.ts`), after mac verification, may call the
-  `confirm_bid_and_increment()` Postgres function — the only code path permitted to write
-  `listings.amount` or `first_confirmed_at` (it does the bid-confirm and the amount increment in
-  one transaction, closing a crash-window gap the earlier two-separate-calls design left open — see
-  `supabase/migrations/20260826_confirm_bid_and_increment.sql`). No other code path — including the
-  submit form, the `return_url` redirect handler, or any admin action — is permitted to touch these
-  fields directly, and the function has `EXECUTE` revoked from `anon`/`authenticated` (only
-  reachable via `service_role`, i.e. only from our own server code). Verified for real: a script
-  fired 8 concurrent RPC calls against one listing via the older `increment_listing_amount()` and
-  confirmed the final amount was the exact sum of all deltas — no lost update (see
+- **Rank integrity is the core threat model.** Only a verified gateway IPN webhook handler
+  (currently `app/api/webhooks/sepay/route.ts`, after X-Secret-Key verification; ZaloPay's
+  equivalent is paused but still correctly gated) may call the `confirm_bid_and_increment()`
+  Postgres function — the only code path permitted to write `listings.amount` or
+  `first_confirmed_at` (it does the bid-confirm and the amount increment in one transaction, closing
+  a crash-window gap the earlier two-separate-calls design left open — see
+  `supabase/migrations/20260826_confirm_bid_and_increment.sql`; gateway-agnostic by design, both
+  webhooks call the same function). No other code path — including the submit form, the
+  `return_url` redirect handler, or any admin action — is permitted to touch these fields directly,
+  and the function has `EXECUTE` revoked from `anon`/`authenticated` (only reachable via
+  `service_role`, i.e. only from our own server code). Verified for real: a script fired 8
+  concurrent RPC calls against one listing via the older `increment_listing_amount()` and confirmed
+  the final amount was the exact sum of all deltas — no lost update (see
   `scripts/verify-atomic-increment.mjs`); `scripts/verify-confirm-bid-concurrency.mjs` re-proves the
   same property for `confirm_bid_and_increment()`.
 - **RLS is the second layer, not the only layer.** Every table has Row Level Security enabled.
@@ -160,8 +178,9 @@ is excluded from analytics events and logs.
 - **Input validation:** all submission input validated server-side (zod) at the API boundary.
   Shortened URLs are resolved server-side before any validation runs; the resolved destination,
   not the shortener link, is what gets checked and stored.
-- **Payments:** no card data ever touches BidTop's servers or logs — ZaloPay's hosted QR/wallet
-  checkout only. IPN mac verification is mandatory, not optional-with-fallback.
+- **Payments:** no card data ever touches BidTop's servers or logs — the gateway's hosted checkout
+  only (SePay, active; ZaloPay, paused). IPN signature/secret verification is mandatory, not
+  optional-with-fallback, on either gateway's webhook.
 - **PII:** `submitter_email` is the only PII field; excluded from logs, analytics events, and any
   public rendering.
 - **`SUPABASE_SERVICE_ROLE_KEY` never reaches the browser.** It's read only in
@@ -193,14 +212,22 @@ is excluded from analytics events and logs.
 - **Team/timeline:** solo founder or very small team running Claude Code sessions; no fixed launch
   date was given, so the sprint plan is sequenced by dependency, not calendar. If there is a real
   deadline, compress by cutting Sprint 5 features to backlog, not by adding parallel work.
+- **SePay API contract** — confirmed against the `sepay-pg-node` SDK's actual shipped source
+  (v1.0.0, read directly, not just its README) and `developer.sepay.vn`'s real payment-gateway docs
+  (a separate site from `docs.sepay.vn`, which covers SePay's other bank-webhook product). A real
+  sandbox exists for this merchant account, so — unlike ZaloPay — every remaining unverified detail
+  can be resolved with a real sandbox payment before touching production: whether `X-Secret-Key` is
+  really the only configured IPN auth option, the exact `currency` value expected (assumed `"VND"`),
+  whether SePay retries on a non-200 IPN response at all, and whether `transaction.id` or
+  `transaction.transaction_id` is the right field for `gateway_txn_id`. See
+  `lib/payment/sepay.ts`'s top-of-file comment for the current status.
 - **ZaloPay API contract** — confirmed against `developers.zalopay.vn`'s public docs (endpoint URLs,
   field names, both HMAC-SHA256 mac formulas) and one live call to the production endpoint (which
-  returned exactly the documented response shape). Two details remain unverified pending a real
-  signed sandbox/production call (no sandbox exists for this account, so this happens against
-  production with a small real payment): the mac's exact byte encoding (assumed lowercase hex,
-  matching common VN-gateway convention) and whether `embeddata.redirecturl` controls the
-  browser-return destination per-request or it's dashboard-configured only. See
-  `lib/payment/zalopay.ts`'s top-of-file comment for the current status.
+  returned exactly the documented response shape), but never live-verified with a real payment
+  before being paused in favor of SePay — the mac's exact byte encoding (assumed lowercase hex) and
+  whether `embeddata.redirecturl` controls the browser-return destination remain unconfirmed. Moot
+  while paused; re-verify if ZaloPay is reactivated. See `lib/payment/zalopay.ts`'s top-of-file
+  comment.
 - **VAT is not part of the ranked amount.** `listings.amount` is the pre-tax bid value shown on the
   leaderboard and used for all rank comparisons; VAT is computed and charged as a separate line
   item at checkout (`bids.vat_amount`), matching standard VN invoice practice without complicating
@@ -209,7 +236,9 @@ is excluded from analytics events and logs.
   listing's first-ever confirmed payment enters the admin queue (F8), since the content was
   already vetted and only the amount is changing.
 - **Rejected-listing refunds are manual** for MVP — the admin processes them outside the system
-  (via the ZaloPay merchant dashboard directly). No refund API call is wired into BidTop.vn itself.
+  (via the active gateway's merchant dashboard directly — currently SePay). No refund API call is
+  wired into BidTop.vn itself, though SePay's SDK does expose `order.voidTransaction`/`.cancel` if
+  this is ever automated.
 - **"N online" (F12)** is implemented via lightweight polling/heartbeat, not WebSockets — expected
   concurrency at this stage doesn't justify persistent-connection infrastructure.
 - **No third-party analytics vendor** ships in the MVP; the footer revenue counter and online count
@@ -217,9 +246,11 @@ is excluded from analytics events and logs.
 
 ## Open questions
 
-- **ZaloPay `getstatusbyapptransid` fallback query** — deferred, not built in Sprint 3. IPN alone
-  satisfies F6/F7's acceptance criteria; add if missed-callback cases turn out to be common enough
-  in practice to need a proactive re-query instead of relying on ZaloPay's own retries.
+- **SePay's `order.retrieve`/status-query API** — deferred, not built. IPN alone satisfies F6/F7's
+  acceptance criteria; add if missed-callback cases turn out to be common enough in practice to need
+  a proactive re-query instead of relying on retries (SePay's own retry behavior on a failed IPN is
+  itself unverified — see Assumptions). ZaloPay's equivalent (`getstatusbyapptransid`) was similarly
+  deferred and is now moot while paused.
 - **Domain/trademark check for bidtop.vn** — confirm the domain is actually registered/available
   and there's no conflicting trademark. Resolve before Sprint 6 (launch).
 - **Legal review of "Dịch vụ pháp lý" and "Crypto, Web3 & Investing"** — not scheduled in any

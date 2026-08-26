@@ -4,7 +4,7 @@ import { CATEGORY_SLUGS } from "@/lib/categorize";
 import { checkBannedPattern, resolveUrl } from "@/lib/content-validation";
 import { notifyNewSubmission } from "@/lib/email/notify";
 import { normalizeListingIdentity } from "@/lib/normalize-identity";
-import { buildApptransid } from "@/lib/payment/zalopay";
+import { buildGatewayOrderId } from "@/lib/payment/order-id";
 import { supabase } from "@/lib/supabase/server";
 
 const bodySchema = z.object({
@@ -16,8 +16,9 @@ const bodySchema = z.object({
 
 // Creates (or tops up) a draft listing + a pending bid. Never touches
 // listings.amount directly — that field stays 0 (new) or unchanged (top-up)
-// until the ZaloPay IPN webhook (app/api/webhooks/zalopay) confirms payment.
-// See CLAUDE.md Safety rules.
+// until the active gateway's IPN webhook (currently app/api/webhooks/sepay —
+// ZaloPay's is paused, see PROGRESS.md Decisions) confirms payment. See
+// CLAUDE.md Safety rules.
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -128,11 +129,11 @@ export async function POST(request: Request) {
       delta_amount: deltaAmount,
       vat_amount: vatAmount,
       total_charged: deltaAmount + vatAmount,
-      // Doubles as ZaloPay's required apptransid (yymmdd_xxxx, unique/day) —
-      // set once here, reused as-is by the checkout-session and webhook
-      // routes so a retried checkout request never mints a second ZaloPay
-      // order for the same bid.
-      gateway_order_id: buildApptransid(),
+      // Gateway-agnostic order id (yymmdd_xxxx, unique/day) — set once here,
+      // reused as-is by the checkout-session and webhook routes so a
+      // retried checkout request never mints a second gateway order for the
+      // same bid.
+      gateway_order_id: buildGatewayOrderId(),
       status: "pending",
     })
     .select("id")

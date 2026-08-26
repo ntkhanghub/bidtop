@@ -1,7 +1,18 @@
 # Sprint 3 — Payment integration & atomic rank engine
 
-**Goal:** A real ZaloPay payment, confirmed only via the server-to-server IPN callback, atomically
-updates a listing's amount — safely under concurrent/duplicate delivery.
+**2026-08-26 addendum — gateway switched mid-sprint, before a real payment happened.** Everything
+below this line documents what was actually built and reasoned through against **ZaloPay** — that
+work is real (checkout, display-only return page, IPN webhook, the `confirm_bid_and_increment` RPC)
+and stays as the historical record, not rewritten. But the user paused ZaloPay ("tạm disable") and
+made **SePay** the active gateway before ZaloPay's own Demo criteria below (a real ZaloPay payment)
+was ever completed. This sprint's Demo/Definition-of-Done are now satisfied via a real **SePay**
+sandbox payment through the exact same `confirm_bid_and_increment`/idempotency pattern instead —
+substitute "SePay" for "ZaloPay" and "sandbox" for "small live" when reading the criteria below. See
+`lib/payment/sepay.ts` and `PROGRESS.md` Decisions for the SePay side of this work.
+
+**Goal:** A real payment, confirmed only via the server-to-server IPN callback, atomically updates a
+listing's amount — safely under concurrent/duplicate delivery. (Originally scoped against ZaloPay;
+see the addendum above.)
 
 **Demo criteria:** At the end of this sprint you can complete a real (small, live — no sandbox
 exists for this merchant account) ZaloPay QR/wallet payment for a submitted listing and see its

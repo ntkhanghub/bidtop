@@ -1,24 +1,12 @@
 import { createHmac } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
-import { buildApptransid, verifyIpnMac, verifyReturnChecksum } from "./zalopay";
+import { verifyIpnMac, verifyReturnChecksum } from "./zalopay";
 
 // Self-contained fixture keys — deliberately NOT the real .env ZALOPAY_KEY1/
 // KEY2 (which may not even be set yet, see PROGRESS.md Blockers). Pure-logic
 // round-trip tests only need consistent keys, not real credentials.
 beforeAll(() => {
   process.env.ZALOPAY_KEY2 = "test-key2";
-});
-
-describe("buildApptransid", () => {
-  it("matches ZaloPay's required yymmdd_xxxx format, well under 40 chars", () => {
-    const id = buildApptransid();
-    expect(id).toMatch(/^\d{6}_[0-9a-f]{8}$/);
-    expect(id.length).toBeLessThanOrEqual(40);
-  });
-
-  it("is different on every call", () => {
-    expect(buildApptransid()).not.toBe(buildApptransid());
-  });
 });
 
 describe("verifyIpnMac", () => {
