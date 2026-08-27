@@ -4,8 +4,7 @@ import { Client } from "pg";
 // One-off verification (not part of `npm test`, needs a running dev server +
 // live DB): posts a correctly-X-Secret-Key-headed synthetic ORDER_PAID IPN
 // payload at the real /api/webhooks/sepay route TWICE and confirms the
-// amount increments exactly once on the second (replayed) delivery — same
-// property scripts/verify-zalopay-idempotency.mjs proves for ZaloPay.
+// amount increments exactly once on the second (replayed) delivery.
 // Deliberately does NOT call SePay for real: we hold SEPAY_SECRET_KEY
 // ourselves, so a synthetic payload headed the same way SePay would head it
 // is enough to exercise our own DB logic, at zero cost.

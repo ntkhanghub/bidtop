@@ -10,6 +10,13 @@ sandbox payment through the exact same `confirm_bid_and_increment`/idempotency p
 substitute "SePay" for "ZaloPay" and "sandbox" for "small live" when reading the criteria below. See
 `lib/payment/sepay.ts` and `PROGRESS.md` Decisions for the SePay side of this work.
 
+**2026-08-27 addendum — ZaloPay removed entirely.** Beyond the pause above, the user's explicit
+decision on 2026-08-27 was to delete the ZaloPay module outright (code, routes, tests, verify
+script) rather than keep it dormant for re-enabling — SePay is now the only payment gateway, not
+just the active one. The task bodies below (S3-T1 through T5) still describe what was actually
+built and reasoned through at the time and are kept as history, unrewritten; see PROGRESS.md
+Decisions for the removal itself.
+
 **Goal:** A real payment, confirmed only via the server-to-server IPN callback, atomically updates a
 listing's amount — safely under concurrent/duplicate delivery. (Originally scoped against ZaloPay;
 see the addendum above.)
@@ -100,5 +107,5 @@ confirmation and unchanged by a later top-up's confirmation.
 - [ ] All tasks meet their acceptance criteria
 - [ ] Demo criteria verified end-to-end with a real payment
 - [ ] Tests and lint pass; no skipped tests introduced
-- [ ] `app/api/payments/mock-confirm/route.ts` deleted once the real flow is verified working
+- [x] `app/api/payments/mock-confirm/route.ts` deleted once the real flow is verified working
 - [ ] PROGRESS.md updated; user has reviewed the demo

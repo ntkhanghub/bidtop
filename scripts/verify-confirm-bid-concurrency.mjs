@@ -6,7 +6,7 @@ import { Client } from "pg";
 // concurrently and confirms the final amount equals the sum of both deltas —
 // the same "no lost update" property scripts/verify-atomic-increment.mjs
 // already proved for increment_listing_amount(), re-proved here for the
-// combined bid-confirm+increment RPC the real ZaloPay webhook calls (see
+// combined bid-confirm+increment RPC the real SePay webhook calls (see
 // supabase/migrations/20260826_confirm_bid_and_increment.sql). Also confirms
 // first_confirmed_at is set once by whichever confirmation lands first and
 // left unchanged by the second.

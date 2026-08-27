@@ -1,7 +1,7 @@
-// SePay's browser-return redirect target (adapted from S3-T3's ZaloPay
-// design). DISPLAY-ONLY — this route must never write to listings/bids. Only
-// the IPN webhook (app/api/webhooks/sepay/route.ts) is authorized to confirm
-// a payment; see CLAUDE.md's rank-integrity rule.
+// SePay's browser-return redirect target. DISPLAY-ONLY — this route must
+// never write to listings/bids. Only the IPN webhook
+// (app/api/webhooks/sepay/route.ts) is authorized to confirm a payment; see
+// CLAUDE.md's rank-integrity rule.
 //
 // `outcome` is a discriminator WE chose ourselves when building the
 // success_url/error_url/cancel_url passed to SePay's checkout — never

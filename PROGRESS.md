@@ -3,8 +3,8 @@
 Single source of truth for project status. Every session updates this file after each completed
 task; no session starts work without reading it.
 
-**Current sprint:** Sprint 3 — Payment integration & atomic rank engine (active gateway: **SePay**;
-ZaloPay built first, then paused — see Decisions).
+**Current sprint:** Sprint 3 — Payment integration & atomic rank engine (only gateway: **SePay**;
+ZaloPay was built first, then paused, then removed entirely on 2026-08-27 — see Decisions).
 **Next task:** SePay's IPN is now confirmed working end-to-end in **production** (real payment →
 webhook → `confirm_bid_and_increment` → listing shows in "Hàng chờ duyệt") after fixing two real
 bugs found via live debugging — see the 2026-08-26/27 task log entries: (1) `order.order_amount`
@@ -12,12 +12,16 @@ arrives as a string, not a number as SePay's docs claimed; (2) the IPN dashboard
 set to "Secret Key" (matching `SEPAY_SECRET_KEY` exactly) or every delivery 401s silently. A
 follow-up bug (also fixed): the TEST_BYPASS_EMAIL feature allowed a top-up's delta to go
 negative/zero if the entered amount was below the listing's current amount, which SePay's checkout
-correctly rejected as "Yêu cầu không hợp lệ." **In progress:** removing the email-ownership check
-entirely (any submitter can top up any listing; email becomes optional) per the user's explicit
-2026-08-27 decision — see Decisions below. `supabase/migrations/20260827_listings_submitter_email_
-nullable.sql` is written but **not yet applied** (needs explicit user confirmation, same as every
-prior migration). `app/api/payments/mock-confirm/route.ts` is still orphaned, not yet deleted —
-delete once the user is confident the real flow is fully trustworthy.
+correctly rejected as "Yêu cầu không hợp lệ." The email-ownership-removal work (any submitter can top
+up any listing; email becomes optional) landed and was committed (`4fc43d1`, `0496477`), and its
+migration is now applied too (2026-08-27, see task log) — this line was previously stale, claiming
+both were still pending. `app/api/payments/mock-confirm/route.ts` is now deleted and the temporary
+SePay IPN diagnostic logging is removed (2026-08-27, see task log). `TEST_BYPASS_EMAIL` is
+deliberately kept for now (user's explicit call) — still needed while the founder debugs live SePay
+behavior; remove before real launch (see Blockers). The ZaloPay module (code, routes, tests, verify
+script) was deleted entirely on 2026-08-27, user's explicit decision — SePay is now the only payment
+gateway, not just the active one; see Decisions and the task log. Remaining before Sprint 3's
+Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Sprint status
 
@@ -25,14 +29,69 @@ delete once the user is confident the real flow is fully trustworthy.
 |---|--------|--------|---------|----------|
 | 1 | Foundation | Done | 2026-08-23 | 2026-08-24 |
 | 2 | Listing submission & identity normalization | Done | 2026-08-24 | 2026-08-24 |
-| 3 | Payment integration & atomic rank engine | In progress — SePay code complete, live verification pending sandbox credentials (see Next task); ZaloPay built first, now paused | 2026-08-26 | — |
+| 3 | Payment integration & atomic rank engine | In progress — SePay live-verified in production, only `TEST_BYPASS_EMAIL` removal left (see Next task); ZaloPay built first, then removed entirely | 2026-08-26 | — |
 | 4 | Admin panel & moderation | Done | 2026-08-24 | 2026-08-24 |
 | 5 | Public leaderboard & growth features | S5-T1–T7,T9 done; T8 deferred (see task log) | 2026-08-25 | — |
 | 6 | Hardening & launch | Not started | — | — |
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
-- 2026-08-27 · In progress: removed the email-ownership check on top-ups (user's explicit decision)
+- 2026-08-27 · ZaloPay module deleted entirely — SePay is now the only payment gateway (user's
+  explicit decision, going further than the earlier "tạm disable" pause) · Deleted
+  `app/api/webhooks/zalopay/`, `app/api/payments/zalopay/create-order/`, `lib/payment/zalopay.ts`,
+  `lib/payment/zalopay.test.ts`, `scripts/verify-zalopay-idempotency.mjs` — confirmed via grep first
+  that nothing in `app/`/`lib/`/`scripts/` still imported any of them. `lib/payment/order-id.ts`
+  (gateway-agnostic `buildGatewayOrderId`, already SePay's only order-id generator) untouched — it
+  has no ZaloPay-specific logic, just a comment on the format's historical origin, left as-is.
+  Cleaned up ZaloPay comparison comments in the surviving code
+  (`app/(public)/submit/pending/pending-confirm.tsx`, `app/api/webhooks/sepay/route.ts`,
+  `app/api/listings/submit/route.ts`, `lib/payment/sepay.ts`,
+  `app/(public)/submit/return/page.tsx`, `scripts/verify-sepay-idempotency.mjs`,
+  `app/api/payments/sepay/create-order/route.ts`, `scripts/verify-confirm-bid-concurrency.mjs`) and
+  removed the `ZALOPAY_APP_ID`/`KEY1`/`KEY2` block from `.env.example` (never added to the real
+  `.env`/Vercel anyway, per the now-moot blocker below). Updated `CLAUDE.md` (tech stack, repo
+  layout, safety rules — `confirm_bid_and_increment`'s `p_gateway_txn_id` param is now described as
+  a leftover gateway-agnostic shape rather than "used by two gateways"), `docs/specs/tech-spec.md`
+  (architecture diagram note, external-integrations bullet, rank-integrity/payments-safety
+  paragraphs, assumptions, open questions — the now-fully-moot "ZaloPay API contract" open question
+  removed outright), `docs/specs/feature-spec.md` (F6 row + user story), `docs/sprints/
+  sprint-02-listing-submission.md` (genericized 2 forward-references that predated the SePay
+  choice), `docs/sprints/sprint-03-payment-rank-engine.md` (new dated addendum on top of the
+  existing "gateway switched mid-sprint" addendum — the S3-T1..T5 task bodies themselves stay
+  unrewritten, per that file's own explicit historical-record policy), `docs/sprints/
+  sprint-06-hardening-launch.md` (S6-T5 and its surrounding mentions renamed from ZaloPay to SePay
+  mechanics, since that sprint hasn't started and its plan would otherwise describe a deleted
+  module). Left untouched, deliberately: already-applied migration file comments
+  (`supabase/migrations/20260823_init.sql`, `20260824_grant_rank_engine_execute.sql`,
+  `20260826_confirm_bid_and_increment.sql` — frozen historical record of applied SQL, not rewritten
+  per CLAUDE.md's additive-only migration convention) and `1st-context.txt` (the original
+  pre-project brainstorm transcript, also frozen). Verified: lint/typecheck (after clearing a stale
+  `.next` build-cache reference to a route that no longer exists)/`npm test` (21/21, down from 26 —
+  the 5 ZaloPay tests are gone)/`npm run build` all pass; build's route table confirmed to list no
+  `/api/*/zalopay/*` or `/api/webhooks/zalopay` paths.
+- 2026-08-27 · Deleted `app/api/payments/mock-confirm/route.ts` + removed temporary SePay IPN
+  diagnostic logging (user's explicit go-ahead, keeping `TEST_BYPASS_EMAIL` for now — user's
+  explicit call) · `mock-confirm` had zero code references left (confirmed via grep — only
+  docs/migration comments named it), so deleted outright; `app/api/payments/` still holds
+  `sepay/`/`zalopay/`, left untouched. `app/api/webhooks/sepay/route.ts`'s diagnostic
+  `console.log`s (added in `64b54d8` to debug the production IPN failures, now resolved) removed
+  by diffing against that commit and reverting exactly its additions — confirmed the result is
+  byte-for-byte the pre-diagnostic route, keeping the pre-existing `console.warn`/`console.error`
+  calls (genuine error paths, not part of the diagnostic commit). Stale `.next/types/validator.ts`
+  referenced the deleted route after the delete — cleared `.next` (a build artifact) and
+  re-typechecked clean. Verified: lint/typecheck/`npm test` (26/26)/`npm run build` all pass, and
+  the build's route table no longer lists `/api/payments/mock-confirm`. `docs/sprints/
+  sprint-03-payment-rank-engine.md`'s Definition of Done checkbox for this deletion is now checked;
+  `CLAUDE.md`'s repo-layout and rank-integrity sections' mock-confirm descriptions updated to match
+  (deleted, not "temporary exception" anymore).
+- 2026-08-27 · Applied `20260827_listings_submitter_email_nullable.sql` (user confirmed) · Verified
+  via a direct read against `information_schema.columns`: `listings.submitter_email` was `NOT NULL`
+  before, `is_nullable: YES` after. This closes a real live bug — the email-ownership-removal code
+  (committed as `4fc43d1`) inserts `email || null`, so any submission with no email was 500ing on the
+  DB's `NOT NULL` constraint until this ran. Not yet re-verified live end-to-end in the browser
+  (submit form with email left blank).
+- 2026-08-27 · Removed the email-ownership check on top-ups (user's explicit decision, now committed
+  as `4fc43d1`/`0496477` — the entry below previously said "not yet committed"; that was stale)
   · Any submitter can now top up any existing listing regardless of email; email becomes optional
   everywhere (submit form, API, DB column). New migration
   `20260827_listings_submitter_email_nullable.sql` (drops the `not null` constraint) — **written,
@@ -420,6 +479,14 @@ delete once the user is confident the real flow is fully trustworthy.
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
+- 2026-08-27 · **Supersedes the 2026-08-26 "ZaloPay paused" decision below — ZaloPay removed
+  entirely, SePay is the only payment gateway** · user's explicit decision, given directly. Goes
+  further than "tạm disable": the code, routes, tests, and verify script are deleted outright, not
+  kept dormant for a 2-line re-enable as the pause decision had planned. All specs/CLAUDE.md/sprint
+  docs updated to match (see the 2026-08-27 task log entry for the full file list). Re-adding
+  ZaloPay later, if ever wanted, would mean re-building it from `git log` history
+  (`app/api/webhooks/zalopay/`, `app/api/payments/zalopay/create-order/`, `lib/payment/zalopay.ts`
+  all existed as of commit `01b6358` and were deleted in this change), not flipping a switch.
 - 2026-08-27 · **Email-ownership check on top-ups removed entirely; email becomes optional** ·
   user's explicit decision, given directly (not something Claude proposed) — confirmed via two
   follow-up questions: (1) any submitter may top up any existing listing regardless of email, no
@@ -620,8 +687,9 @@ reflected back into the spec file. -->
   production payments (`digilever.vn`) now correctly flow through checkout → IPN → RPC →
   "Hàng chờ duyệt". Getting here needed 3 separate fixes (dashboard Auth Type, `SEPAY_SECRET_KEY`
   sync, `order_amount` string coercion) — see the 2026-08-26/27 task log entry.
-- **ZaloPay credentials question is now moot while paused** — `ZALOPAY_APP_ID`/`KEY1`/`KEY2` were
-  never added to `.env`/Vercel either; not a blocker unless ZaloPay is reactivated.
+- **RESOLVED (superseded): ZaloPay credentials question** — moot now that the ZaloPay module is
+  deleted entirely (2026-08-27), not just paused; `ZALOPAY_APP_ID`/`KEY1`/`KEY2` were never added to
+  `.env`/Vercel either.
 - **Remaining unverified SePay facts** (low priority, nothing currently depends on them): whether
   SePay retries on a non-200 IPN response indefinitely or a limited number of times (retries are
   confirmed to happen at all — several pre-fix stuck bids self-resolved once the code was corrected,
@@ -629,35 +697,28 @@ reflected back into the spec file. -->
   meaningful field for `gateway_txn_id` (both are populated in practice, either works). Confirmed,
   no longer open: `X-Secret-Key` + dashboard Auth Type is the real IPN auth mechanism;
   `order_amount` arrives as a string.
-- **Temporary diagnostic logging still in `app/api/webhooks/sepay/route.ts`** — added to catch the
-  bugs above, deliberately left in since it's cheap and non-sensitive (structural facts only, no
-  card data or full bodies), but should be removed once the team is confident no further SePay
-  debugging is needed.
-- **`supabase/migrations/20260827_listings_submitter_email_nullable.sql` written but not applied** —
-  needs explicit user confirmation before running, same as every prior migration. Blocks the
-  email-ownership-removal work above from being fully live (code changes are in place, but the DB
-  column still has `not null` until this runs).
-- The mock payment step (`app/api/payments/mock-confirm/`) is still live in production and always
-  "succeeds" with no real charge — a real free-rank exploit until the real (now SePay) flow is
-  live-verified end-to-end and this file is deleted (its call site in `pending-confirm.tsx` is
-  already rewired to the real flow, but the mock endpoint itself is still reachable). Must not be
-  forgotten before any real launch/marketing push.
+- **RESOLVED: temporary diagnostic logging removed from `app/api/webhooks/sepay/route.ts`**
+  (2026-08-27) — no longer needed now that the SePay IPN bugs it was added to catch are fixed and
+  confirmed working live.
+- **RESOLVED: `20260827_listings_submitter_email_nullable.sql` applied** (2026-08-27, user
+  confirmed) — `listings.submitter_email` is now nullable in production, matching the
+  email-optional code already shipped. Not yet re-verified live in-browser (submit with email
+  blank).
+- **RESOLVED: mock payment step deleted** (2026-08-27, `app/api/payments/mock-confirm/route.ts`) —
+  the real free-rank exploit it posed (always "succeeds" with no real charge, reachable in
+  production) is closed now that the real SePay flow is live-verified.
 - bidtop.vn domain/trademark availability not yet confirmed — must resolve before Sprint 6.
 - Legal review of "Dịch vụ pháp lý" and "Crypto, Web3 & Investing" categories not started — both
   stay out of the product indefinitely until done (no sprint assigned).
-- **"QR tĩnh" (ZaloPay static QR) — explicitly delayed by the user (2026-08-26), not in scope for
-  now.** Research so far: it's a separate ZaloPay product (Merchant Console, `mc.zalopay.vn`/
-  `sbmc.zalopay.vn`) from the Gateway API (`v001/tpe`) Sprint 3 uses; the callback URL the user
-  provided (`qrpay.zalopay.vn/merchant/shop/callback`) 404s and no public API docs exist for
-  querying/receiving static-QR transaction results. A real design blocker also surfaced: static QR
-  has no per-transaction order reference, so confirming a payment would need either amount+time
-  matching (still ambiguous under concurrent same-amount bids) or admin manual confirmation — the
-  user leaned toward manual admin confirmation (reasoning: admin already reviews every new listing
-  before publish, so reviewing the payment too is consistent) but this needs an explicit, deliberate
-  carve-out in CLAUDE.md's rank-integrity rule ("no admin action may increment amount directly")
-  before building it, since it's a permanent exception, not a temporary one like mock-confirm. User
-  was about to check `mc.zalopay.vn` for a real webhook/API before this got paused — pick that back
-  up when resuming.
+- **RESOLVED (moot): "QR tĩnh" (ZaloPay static QR)** — was already delayed (2026-08-26); now moot
+  entirely now that ZaloPay is removed as a gateway (2026-08-27). Left as a record in case a
+  similar static-QR idea comes up against SePay or a future gateway: it's a separate product from
+  the Gateway/checkout API (ZaloPay's version was Merchant Console, `mc.zalopay.vn`/
+  `sbmc.zalopay.vn`, distinct from `v001/tpe`), and a real design problem surfaced — static QR has
+  no per-transaction order reference, so confirming a payment needs either amount+time matching
+  (ambiguous under concurrent same-amount bids) or admin manual confirmation, which would need an
+  explicit, deliberate carve-out in CLAUDE.md's rank-integrity rule ("no admin action may increment
+  amount directly") since it'd be a permanent exception, not a temporary one like mock-confirm was.
 - **Test-only minimum-amount bypass for `ntkhang@gmail.com`** (`TEST_BYPASS_EMAIL` in
   `app/api/listings/submit/route.ts` and `app/(public)/submit/submit-form.tsx`) — lets the founder
   submit/top-up with any amount (even a few thousand đ) instead of the normal starting-price/

@@ -19,7 +19,7 @@ first 77 hours), localized for VNĐ and the Vietnamese SME/startup market.
 | F3 | Static pages (`/rules`, `/about`) | Must | 5 |
 | F4 | Listing submission form + identity normalization + content validation | Must | 2 |
 | F5 | AI auto-category assignment on submit | Must | 2 |
-| F6 | Payment gateway checkout + IPN webhook confirmation (active: SePay; ZaloPay paused) | Must | 3 |
+| F6 | Payment gateway checkout + IPN webhook confirmation (SePay) | Must | 3 |
 | F7 | Atomic rank engine (amount = amount + delta, race-safe) | Must | 3 |
 | F8 | Admin moderation panel (approve/reject pending listings) | Must | 4 |
 | F9 | Admin settings (starting price / min increment / VAT %, super_admin only) | Must | 4 |
@@ -99,10 +99,9 @@ from 19 options myself.
 
 ### F6 — Payment gateway checkout + IPN webhook confirmation
 As the platform, I want payment confirmation to come only from the gateway's server-to-server IPN
-callback so that no one can fake a rank by manipulating the browser redirect. Gateway-neutral by
-design: this feature has already been implemented against two gateways (ZaloPay, then SePay) — see
-PROGRESS.md Decisions for why, and `lib/payment/{sepay,zalopay}.ts` for the gateway-specific pieces.
-Currently active: **SePay**.
+callback so that no one can fake a rank by manipulating the browser redirect. ZaloPay was built
+first, then paused, then removed entirely in favor of SePay — see PROGRESS.md Decisions for why, and
+`lib/payment/sepay.ts` for the gateway-specific pieces. Gateway: **SePay**.
 
 **Acceptance criteria:**
 - Submitting a valid, sufficient bid amount creates a `bids` row with `status = pending` and a

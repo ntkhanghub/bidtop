@@ -27,8 +27,7 @@ const TEST_BYPASS_EMAIL = "ntkhang@gmail.com";
 
 // Creates (or tops up) a draft listing + a pending bid. Never touches
 // listings.amount directly — that field stays 0 (new) or unchanged (top-up)
-// until the active gateway's IPN webhook (currently app/api/webhooks/sepay —
-// ZaloPay's is paused, see PROGRESS.md Decisions) confirms payment. See
+// until SePay's IPN webhook (app/api/webhooks/sepay) confirms payment. See
 // CLAUDE.md Safety rules.
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json());

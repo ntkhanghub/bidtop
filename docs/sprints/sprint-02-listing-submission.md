@@ -15,8 +15,8 @@ correctly in Postgres — including for a duplicate submission of an already-kno
 - F5 — AI auto-category assignment on submit
 
 ## Out of scope
-- Real ZaloPay checkout call and webhook (Sprint 3) — this sprint ends at "ready to pay," using a
-  stub/placeholder redirect
+- Real payment gateway checkout call and webhook (Sprint 3) — this sprint ends at "ready to pay,"
+  using a stub/placeholder redirect
 - Admin review (Sprint 4)
 
 ## Tasks
@@ -93,7 +93,7 @@ listing, and email is optional. Left below as historical record, not rewritten.
 On valid submission, create (or reuse, for an existing `identity_key`) a `listings` row and a new
 `bids` row (`status = pending`, `delta_amount` = the entered amount minus current amount,
 `vat_amount` computed from `settings.vat_percent`), then redirect to a placeholder "proceeding to
-payment" page (real ZaloPay call lands in Sprint 3).
+payment" page (real gateway call lands in Sprint 3).
 **Acceptance:** submitting twice for the same new domain does not create two `listings` rows for
 the same `identity_key` (unique constraint from S1-T4 holds); an existing-domain resubmission with
 a matching stored email creates a top-up bid against the existing listing, not a new one; a

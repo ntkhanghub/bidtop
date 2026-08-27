@@ -73,14 +73,11 @@ ceremony.
   Safety rules. Only Supabase's Postgres is used — its Auth, Storage, and Realtime products are
   explicitly out of scope; do not wire them in without asking, since guest checkout with no user
   accounts is a deliberate decision (see Non-goals)
-- SePay — **active** payment gateway (checkout session + IPN webhook), `lib/payment/sepay.ts`, via
+- SePay — the only payment gateway (checkout session + IPN webhook), `lib/payment/sepay.ts`, via
   the official `sepay-pg-node` SDK. QR chuyển khoản ngân hàng only (`payment_method=BANK_TRANSFER`).
   Real sandbox exists for this merchant account — `SEPAY_ENV` picks sandbox/production, fails safe
-  to sandbox if unset (see PROGRESS.md Decisions).
-- ZaloPay — **paused** ("tạm disable", user's explicit call, not deleted), `lib/payment/zalopay.ts`.
-  Was the active gateway briefly; superseded by SePay before a real payment happened. Code, routes,
-  and tests all still intact and correct — re-enabling is a 2-line change (swap the two call-site
-  imports in `pending-confirm.tsx`/`submit/route.ts` back). See PROGRESS.md Decisions.
+  to sandbox if unset (see PROGRESS.md Decisions). ZaloPay was built first, briefly active, then
+  paused, then removed entirely (user's explicit call) — see PROGRESS.md Decisions.
 - Claude API (Haiku) — one-shot category classification at submission time
 - Vercel — hosting, zero-ops
 - No end-user auth system. Admin auth only: stateless HMAC-signed httpOnly session cookie
@@ -110,20 +107,11 @@ app/
   admin/login/                # S4 — public login page
   api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject,category,
                                # unpublish,republish}, settings
-  api/payments/mock-confirm/  # TEMPORARY stand-in, see its file comment. A real flow exists now
-                               # (create-order/, webhooks/sepay/ below) — deleted once that flow is
-                               # live-verified with a real payment. Already orphaned (unreachable from
-                               # any UI), just not yet deleted.
-  api/payments/sepay/create-order/  # ACTIVE — starts a SePay checkout, returns {checkoutUrl, fields}
+  api/payments/sepay/create-order/  # starts a SePay checkout, returns {checkoutUrl, fields}
                                # (a form-POST target, not a redirect URL)
-  api/payments/zalopay/create-order/  # PAUSED — starts a ZaloPay checkout, returns orderUrl. Unwired
-                               # (see lib/payment/zalopay.ts), kept intact for re-enabling.
   api/presence/heartbeat/     # S5 — "N online" heartbeat (F12), self-built, no third-party vendor
-  api/webhooks/sepay/         # ACTIVE — real IPN webhook; verifies X-Secret-Key, calls
+  api/webhooks/sepay/         # real IPN webhook; verifies X-Secret-Key, calls
                                # confirm_bid_and_increment()
-  api/webhooks/zalopay/       # PAUSED — real IPN webhook; verifies mac, calls
-                               # confirm_bid_and_increment(). Unwired (no callback URL registered
-                               # anywhere), kept intact for re-enabling.
   out/[id]/                   # S5 — outbound click tracking (F14): records a listing_clicks row,
                                # then redirects to display_url with UTM params. Not under /api/ —
                                # a clicked <a href> returning a redirect, not a fetch() endpoint.
@@ -138,9 +126,8 @@ lib/
     server.test.ts
     database.types.ts         # hand-written Database type — keep in sync with SQL by hand
   normalize-identity.ts       # (planned, S2) canonical identity_key logic
-  payment/order-id.ts         # gateway-agnostic bids.gateway_order_id generator, used by both gateways
-  payment/sepay.ts            # ACTIVE — sepay-pg-node SDK wrapper, checkout signing, IPN verification
-  payment/zalopay.ts          # PAUSED — mac signing/verification, createorder call (kept intact)
+  payment/order-id.ts         # bids.gateway_order_id generator
+  payment/sepay.ts            # sepay-pg-node SDK wrapper, checkout signing, IPN verification
   categorize.ts               # (planned, S2) LLM category classifier
 supabase/
   migrations/                 # raw SQL, applied manually — see Commands. Never re-run the
@@ -176,7 +163,7 @@ PROGRESS.md
 - Every category/listing string that's user-facing is Vietnamese; code, comments, and commit
   messages are English.
 - Commit format: Conventional Commits (`feat:`, `fix:`, `chore:`), referencing the task ID
-  (`feat(S3-T2): create ZaloPay checkout session`).
+  (`feat(S3-T2): create SePay checkout session`).
 - Feature flags/backwards-compat shims: don't add them pre-launch — change the code directly.
 - Toast (sonner) is for transient, non-blocking feedback: "Đã duyệt", "Đã lưu cài đặt", payment
   failure notices. Field-level validation (e.g. bid amount below the required minimum) stays as an
@@ -200,8 +187,7 @@ PROGRESS.md
   `DATABASE_URL`/`DIRECT_URL` — dev-tooling-only direct Postgres connection for
   `scripts/apply-migration.mjs`; `ANTHROPIC_API_KEY`; `SEPAY_MERCHANT_ID`, `SEPAY_SECRET_KEY`
   (signs checkout requests + verifies inbound IPN), `SEPAY_ENV` (sandbox/production, fails safe to
-  sandbox) — the active gateway, see `lib/payment/sepay.ts`; `ZALOPAY_APP_ID`, `ZALOPAY_KEY1`,
-  `ZALOPAY_KEY2` — paused gateway, kept for re-enabling, see `lib/payment/zalopay.ts`;
+  sandbox) — the only payment gateway, see `lib/payment/sepay.ts`;
   `ADMIN_SESSION_SECRET` — signs the admin session cookie, see
   `lib/auth/session.ts`; `RESEND_API_KEY`, `ADMIN_NOTIFICATION_EMAIL`, `RESEND_FROM_EMAIL` —
   admin email notifications, see `lib/email/notify.ts`, all three silently no-op if unset); keep
@@ -216,26 +202,24 @@ PROGRESS.md
 - Never commit with failing checks and never bypass hooks (`--no-verify`).
 - No real user data (real emails, real payment details) in tests, fixtures, or logs.
 - **Rank integrity is the core threat model.** Only the verified gateway IPN webhook handler
-  (currently `app/api/webhooks/sepay/route.ts` — ZaloPay's equivalent, `webhooks/zalopay/route.ts`,
-  is paused/unwired but still correctly gated) may write `listings.amount`/`first_confirmed_at` —
-  never a read-modify-write from application code, never from the submit form, never from the
-  `return_url` redirect handler (`app/(public)/submit/return/`, display-only by design). It does so
-  via `confirm_bid_and_increment(p_bid_id, p_gateway_txn_id)`, a single Postgres function call that
+  (`app/api/webhooks/sepay/route.ts`) may write `listings.amount`/`first_confirmed_at` — never a
+  read-modify-write from application code, never from the submit form, never from the `return_url`
+  redirect handler (`app/(public)/submit/return/`, display-only by design). It does so via
+  `confirm_bid_and_increment(p_bid_id, p_gateway_txn_id)`, a single Postgres function call that
   row-locks the bid and does both the bid-confirm and the amount-increment in one transaction (see
-  `supabase/migrations/20260826_confirm_bid_and_increment.sql`) — gateway-agnostic by design, both
-  the SePay and ZaloPay webhooks call the exact same function. The older
+  `supabase/migrations/20260826_confirm_bid_and_increment.sql`) — the function's `p_gateway_txn_id`
+  parameter is a gateway-agnostic opaque string, a leftover from when a second gateway (ZaloPay,
+  since removed) also called it; no redesign needed now that only SePay does. The older
   `increment_listing_amount(p_listing_id, p_delta)` function still exists (additive-only past
   Sprint 1) but is no longer called by either real flow. Every rank-writing function has `EXECUTE`
   revoked from `anon`/`authenticated` at the DB level, not just gated in app code (service_role must
   be explicitly re-granted `EXECUTE` in the same migration file — see
   `supabase/migrations/20260824_grant_rank_engine_execute.sql` for the exact bug this guards
-  against). **Temporary exception:** `app/api/payments/mock-confirm/route.ts` still exists and
-  still calls `increment_listing_amount()` directly — deliberately ungated (reachable in
-  production), an accepted pre-launch risk per explicit user decision. It is already orphaned
-  (`pending-confirm.tsx` calls SePay's create-order route, not this) — delete it once the real
-  SePay flow is live-verified with an actual payment — see PROGRESS.md Blockers.
-- Payments: no card data ever touches our servers or logs — the gateway's hosted checkout only
-  (SePay, active; ZaloPay, paused — see PROGRESS.md Decisions). Every inbound webhook call verifies
+  against). The temporary `app/api/payments/mock-confirm/route.ts` stand-in (ungated,
+  `increment_listing_amount()`-calling) has been deleted now that the real SePay flow is
+  live-verified — see PROGRESS.md.
+- Payments: no card data ever touches our servers or logs — SePay's hosted checkout only. Every
+  inbound webhook call verifies
   the gateway's signature/secret before any processing; a failed check is rejected outright, before
   any DB access.
 - Idempotency: `bids.gateway_order_id` is unique; the webhook handler always checks existing

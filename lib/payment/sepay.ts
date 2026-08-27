@@ -7,15 +7,15 @@ import { SePayPgClient } from "sepay-pg-node";
 // developer.sepay.vn's real payment-gateway docs — a separate docs site from
 // docs.sepay.vn, which covers SePay's other product (bank-transfer webhooks).
 //
-// Checkout is a browser FORM POST, not a fetch-and-redirect like ZaloPay's
-// orderUrl: `initCheckoutUrl()` returns a POST target, not something
-// navigable via location.href. The caller must render a hidden <form> with
-// every entry in `fields` as a hidden input and submit it — see
+// Checkout is a browser FORM POST, not a fetch-and-redirect:
+// `initCheckoutUrl()` returns a POST target, not something navigable via
+// location.href. The caller must render a hidden <form> with every entry in
+// `fields` as a hidden input and submit it — see
 // app/(public)/submit/pending/pending-confirm.tsx.
 //
-// IPN auth is a shared-secret header (X-Secret-Key), not an HMAC-signed body
-// like ZaloPay's — verified against developer.sepay.vn/en/cong-thanh-toan/IPN,
-// and confirmed for real via a live production payload (2026-08-26): the
+// IPN auth is a shared-secret header (X-Secret-Key) — verified against
+// developer.sepay.vn/en/cong-thanh-toan/IPN, and confirmed for real via a
+// live production payload (2026-08-26): the
 // merchant dashboard's "Cấu hình IPN" screen really does offer an Auth Type
 // choice ("Không có" vs "Secret Key") — it must be set to "Secret Key" and
 // the value must exactly match SEPAY_SECRET_KEY, or every delivery 401s
@@ -29,9 +29,9 @@ import { SePayPgClient } from "sepay-pg-node";
 //
 // payment_method fixed to "BANK_TRANSFER" (QR chuyển khoản ngân hàng only, no
 // card) — the user's explicit choice, see PROGRESS.md Decisions. A real
-// sandbox exists for this merchant account (unlike ZaloPay), so SEPAY_ENV is
-// a real env-configurable toggle; it fails safe to "sandbox" if unset rather
-// than defaulting to production.
+// sandbox exists for this merchant account, so SEPAY_ENV is a real
+// env-configurable toggle; it fails safe to "sandbox" if unset rather than
+// defaulting to production.
 const PAYMENT_METHOD = "BANK_TRANSFER";
 
 function requireEnv(name: string): string {

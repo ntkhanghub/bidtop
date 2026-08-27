@@ -9,10 +9,9 @@ import { Button } from "@/components/ui/button";
 type Checkout = { checkoutUrl: string; fields: Record<string, string | number> };
 
 // SePay's checkout is a browser FORM POST (initCheckoutUrl() is a POST
-// target, not a redirect-navigable URL like ZaloPay's orderUrl) — this
-// component fetches the signed fields, renders a hidden auto-submitting
-// <form>, and provides a manual fallback button in case JS auto-submit is
-// blocked.
+// target, not a redirect-navigable URL) — this component fetches the signed
+// fields, renders a hidden auto-submitting <form>, and provides a manual
+// fallback button in case JS auto-submit is blocked.
 export function PendingConfirm() {
   const searchParams = useSearchParams();
   const bidId = searchParams.get("bid");

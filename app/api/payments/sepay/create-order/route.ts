@@ -9,9 +9,9 @@ const bodySchema = z.object({ bidId: z.string().uuid() });
 // (app/api/listings/submit). Only talks to the gateway — never touches
 // listings.amount/bids.status itself. Only the IPN webhook
 // (app/api/webhooks/sepay) is authorized to do that, per CLAUDE.md's
-// rank-integrity rule. Unlike ZaloPay's equivalent route, the checkout is a
-// browser FORM POST, not a redirect: this returns { checkoutUrl, fields }
-// for the client to submit as a hidden form, not a bare orderUrl.
+// rank-integrity rule. The checkout is a browser FORM POST, not a redirect:
+// this returns { checkoutUrl, fields } for the client to submit as a hidden
+// form, not a bare orderUrl.
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
