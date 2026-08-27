@@ -17,17 +17,19 @@ async function sendNotification(subject: string, html: string): Promise<void> {
 }
 
 // A brand-new listing was created (pending_payment) — not a top-up.
-export function notifyNewSubmission(listing: { displayUrl: string; submitterEmail: string }) {
+// submitterEmail is optional (user's explicit decision, 2026-08-27) — no
+// longer required at checkout.
+export function notifyNewSubmission(listing: { displayUrl: string; submitterEmail: string | null }) {
   return sendNotification(
     "BidTop.vn — Listing mới chờ thanh toán",
-    `<p>Listing mới vừa được tạo, đang chờ thanh toán.</p><p><strong>${listing.displayUrl}</strong></p><p>Người đăng: ${listing.submitterEmail}</p>`,
+    `<p>Listing mới vừa được tạo, đang chờ thanh toán.</p><p><strong>${listing.displayUrl}</strong></p><p>Người đăng: ${listing.submitterEmail ?? "(không có email)"}</p>`,
   );
 }
 
 // A listing just reached paid_pending_review — the "go check the queue" moment.
-export function notifyReadyForReview(listing: { displayUrl: string; submitterEmail: string }) {
+export function notifyReadyForReview(listing: { displayUrl: string; submitterEmail: string | null }) {
   return sendNotification(
     "BidTop.vn — Listing sẵn sàng để duyệt",
-    `<p>Listing đã thanh toán xong, cần admin duyệt.</p><p><strong>${listing.displayUrl}</strong></p><p>Người đăng: ${listing.submitterEmail}</p>`,
+    `<p>Listing đã thanh toán xong, cần admin duyệt.</p><p><strong>${listing.displayUrl}</strong></p><p>Người đăng: ${listing.submitterEmail ?? "(không có email)"}</p>`,
   );
 }

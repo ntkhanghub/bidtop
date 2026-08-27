@@ -169,10 +169,16 @@ is excluded from analytics events and logs.
 - **Idempotency:** `bids.gateway_order_id` is a unique constraint; the webhook handler checks
   existing `bids.status` before applying the amount increment, so a retried webhook delivery is a
   safe no-op.
-- **Guest identity model:** ownership for top-ups is `identity_key + submitter_email` match — no
-  password, no magic link in MVP. This is a deliberately weak, low-friction model; if abuse
-  (email spoofing to hijack a listing's top-up) shows up post-launch, add email verification
-  (magic link) before the top-up flow, not after.
+- **Guest identity model — no ownership concept at all (superseded 2026-08-27):** top-ups no longer
+  require any email match; any submitter may top up any existing `identity_key`, matching the
+  product's core mechanic ("rank is purely the amount paid") literally — user's explicit decision,
+  see PROGRESS.md Decisions. `submitter_email` is now nullable
+  (`20260827_listings_submitter_email_nullable.sql`) and optional at checkout, collected only for
+  admin contact purposes when given, never validated or matched against anything. **Original
+  design, kept for history:** ownership for top-ups was `identity_key + submitter_email` match, no
+  password/magic link — deliberately weak and low-friction, meant to be strengthened with email
+  verification if abuse showed up. That concern is now moot since there's no ownership claim left to
+  abuse.
 - **Admin auth:** hashed passwords (argon2id), session cookies (httpOnly), role checked
   server-side on every admin route and mutation — never inferred from client-sent role claims.
 - **Input validation:** all submission input validated server-side (zod) at the API boundary.

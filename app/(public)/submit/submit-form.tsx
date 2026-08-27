@@ -175,7 +175,7 @@ export function SubmitForm({
       </div>
 
       <div>
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">Email (tuỳ chọn)</Label>
         <Input
           id="email"
           type="email"

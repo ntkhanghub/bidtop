@@ -11,7 +11,10 @@ const bodySchema = z.object({
   identity: z.string().min(1),
   amount: z.number().int().positive(),
   categorySlug: z.enum(CATEGORY_SLUGS),
-  email: z.string().email(),
+  // Optional (user's explicit decision, 2026-08-27): no ownership check on
+  // top-ups anymore, so email is no longer required to prove anything — it's
+  // only collected for admin contact purposes when given.
+  email: z.union([z.string().email(), z.literal("")]).optional().default(""),
 });
 
 // TEST-ONLY: bypasses the minimum-amount checks below when submitting under
@@ -82,16 +85,25 @@ export async function POST(request: Request) {
   let isNewListing = false;
 
   if (existing) {
-    if (existing.submitter_email.toLowerCase() !== email.toLowerCase()) {
-      return NextResponse.json(
-        { error: "Domain/handle này đã được đăng ký với email khác." },
-        { status: 409 },
-      );
-    }
+    // No ownership check — any submitter may top up any existing listing
+    // (user's explicit decision, 2026-08-27; see PROGRESS.md Decisions).
     const minimum = existing.amount + settings.min_increment;
     if (!isTestBypass && amount < minimum) {
       return NextResponse.json(
         { error: `Số tiền tối thiểu là ${minimum.toLocaleString("vi-VN")}đ.` },
+        { status: 400 },
+      );
+    }
+    // Structural invariant, not a bypassable business rule: a top-up's delta
+    // must be positive, or a negative/zero amount gets sent to the gateway
+    // and rejected there instead of here. The normal (non-bypass) branch
+    // above already guarantees this since min_increment > 0; TEST_BYPASS_EMAIL
+    // skips that guarantee, so this must be checked unconditionally.
+    if (amount <= existing.amount) {
+      return NextResponse.json(
+        {
+          error: `Số tiền phải lớn hơn số tiền hiện tại (${existing.amount.toLocaleString("vi-VN")}đ).`,
+        },
         { status: 400 },
       );
     }
@@ -110,7 +122,7 @@ export async function POST(request: Request) {
         identity_key: identityKey,
         display_url: displayUrl,
         category_id: category.id,
-        submitter_email: email,
+        submitter_email: email || null,
         status: "pending_payment",
       })
       .select("id")
@@ -154,7 +166,7 @@ export async function POST(request: Request) {
 
   if (isNewListing) {
     try {
-      await notifyNewSubmission({ displayUrl, submitterEmail: email });
+      await notifyNewSubmission({ displayUrl, submitterEmail: email || null });
     } catch (err) {
       console.error("notifyNewSubmission failed:", err);
     }

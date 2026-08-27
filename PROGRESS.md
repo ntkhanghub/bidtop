@@ -5,18 +5,19 @@ task; no session starts work without reading it.
 
 **Current sprint:** Sprint 3 — Payment integration & atomic rank engine (active gateway: **SePay**;
 ZaloPay built first, then paused — see Decisions).
-**Next task:** the user completed a sandbox checkout end-to-end (SePay's page, real payment), but the
-underlying bid was never confirmed — caught via a live DB check (see 2026-08-26 task log entry
-below): the `confirm_bid_and_increment` migration had never been applied, so every real IPN delivery
-was 500ing at the RPC call. **Migration is now applied** (with the user's explicit confirmation) and
-verified live via `scripts/verify-confirm-bid-concurrency.mjs` (no lost update, replay is a no-op).
-**Still needed before trusting production:** re-run one real SePay sandbox payment now that the fix
-is live, to confirm the FULL path (SePay → IPN → webhook → RPC) actually flips a bid to `confirmed`
-and increments `listings.amount` — the concurrency script only proved the RPC itself, not the
-webhook route/IPN delivery end-to-end. Once that's confirmed: switch `SEPAY_ENV=production` +
-production `SEPAY_MERCHANT_ID`/`SEPAY_SECRET_KEY` in Vercel, register the production domain's
-`/api/webhooks/sepay` as the IPN URL in SePay's dashboard, do one real small production payment,
-then delete `app/api/payments/mock-confirm/route.ts` (already orphaned, not yet deleted).
+**Next task:** SePay's IPN is now confirmed working end-to-end in **production** (real payment →
+webhook → `confirm_bid_and_increment` → listing shows in "Hàng chờ duyệt") after fixing two real
+bugs found via live debugging — see the 2026-08-26/27 task log entries: (1) `order.order_amount`
+arrives as a string, not a number as SePay's docs claimed; (2) the IPN dashboard's Auth Type must be
+set to "Secret Key" (matching `SEPAY_SECRET_KEY` exactly) or every delivery 401s silently. A
+follow-up bug (also fixed): the TEST_BYPASS_EMAIL feature allowed a top-up's delta to go
+negative/zero if the entered amount was below the listing's current amount, which SePay's checkout
+correctly rejected as "Yêu cầu không hợp lệ." **In progress:** removing the email-ownership check
+entirely (any submitter can top up any listing; email becomes optional) per the user's explicit
+2026-08-27 decision — see Decisions below. `supabase/migrations/20260827_listings_submitter_email_
+nullable.sql` is written but **not yet applied** (needs explicit user confirmation, same as every
+prior migration). `app/api/payments/mock-confirm/route.ts` is still orphaned, not yet deleted —
+delete once the user is confident the real flow is fully trustworthy.
 
 ## Sprint status
 
@@ -31,6 +32,45 @@ then delete `app/api/payments/mock-confirm/route.ts` (already orphaned, not yet 
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-27 · In progress: removed the email-ownership check on top-ups (user's explicit decision)
+  · Any submitter can now top up any existing listing regardless of email; email becomes optional
+  everywhere (submit form, API, DB column). New migration
+  `20260827_listings_submitter_email_nullable.sql` (drops the `not null` constraint) — **written,
+  not yet applied**, needs user confirmation. Code changes: `app/api/listings/submit/route.ts`
+  (zod schema accepts `""`/omitted email, defaults to `""`; removed the
+  `existing.submitter_email !== email` 409 check entirely; inserts `email || null`);
+  `lib/supabase/database.types.ts` (`submitter_email: string | null`); `lib/email/notify.ts` (both
+  notify functions render `"(không có email)"` when null); admin `queue-row.tsx`/`listing-row.tsx`
+  (type + same null-fallback rendering); `submit-form.tsx`/`submit/page.tsx` copy updated (label
+  "(tuỳ chọn)", intro text no longer tells users to re-enter their old email). Docs updated:
+  `tech-spec.md`'s "Guest identity model" (now explicitly "no ownership concept at all", original
+  design kept for history), `feature-spec.md` F10 (title/acceptance criteria rewritten), `CLAUDE.md`
+  Non-goals line. Not yet verified live or committed — see Next task above.
+- 2026-08-26/27 · Root-caused and fixed the real SePay IPN failures (2 bugs) + a bypass-induced
+  negative-delta bug, all found via live production debugging with the user · **Bug 1**: added
+  temporary diagnostic logging to `app/api/webhooks/sepay/route.ts` (structural facts only — header
+  presence, top-level JSON keys, notification_type, zod issue paths — never full bodies or card
+  fields) since neither of us had direct Vercel/SePay dashboard log access otherwise; the user
+  pasted real production logs showing `order.order_amount` failed zod validation
+  (`"expected":"number"..."received":"string"`) — SePay's real payload sends it as a string,
+  contradicting its own public docs ("long"). Fixed with `z.coerce.number()`. **Bug 2** (found
+  first, chronologically): IPN deliveries were 401ing silently because the SePay merchant
+  dashboard's "Cấu hình IPN" screen has an "Auth Type" selector defaulting to "Không có" (none) —
+  had to be switched to "Secret Key" (matching `SEPAY_SECRET_KEY` exactly) before SePay would send
+  the `X-Secret-Key` header our webhook requires; a stale sandbox-vs-production secret mismatch
+  compounded this briefly (diagnosed via a direct synthetic-payload probe against the live
+  production URL, run from this session, comparing local `.env`'s secret against what Vercel
+  actually had configured). **Bug 3**: `TEST_BYPASS_EMAIL` (added 2026-08-26) skipped the entire
+  minimum-amount check on top-ups, including the implicit guarantee that `delta > 0` — entering a
+  bypass amount below a listing's current amount produced a negative `total_charged`, which SePay's
+  checkout correctly rejected ("Yêu cầu không hợp lệ"). Fixed by unconditionally requiring
+  `amount > existing.amount` regardless of bypass state. All three fixes verified live against
+  production (`digilever.vn` now correctly shows `paid_pending_review`, amount 15,000đ, visible in
+  "Hàng chờ duyệt"); junk test bids (0 and -10000 delta) cleaned up from the DB. Confirmed as a
+  side effect: SePay DOES retry failed (non-2xx) IPN deliveries — several bids stuck from before
+  the fixes landed were retried and confirmed automatically once the code was corrected, without a
+  fresh payment. Diagnostic logging is intentionally left in place for now (flagged for removal once
+  the team is confident no further debugging is needed).
 - 2026-08-26 · Caught + fixed a real bug: the SePay rank-confirmation migration was never applied ·
   User completed a sandbox checkout (real SePay payment, redirected to the success page) and reported
   it as a successful test. A read-only DB check (querying `bids` directly) showed the 5 most recent
@@ -380,6 +420,16 @@ then delete `app/api/payments/mock-confirm/route.ts` (already orphaned, not yet 
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
+- 2026-08-27 · **Email-ownership check on top-ups removed entirely; email becomes optional** ·
+  user's explicit decision, given directly (not something Claude proposed) — confirmed via two
+  follow-up questions: (1) any submitter may top up any existing listing regardless of email, no
+  exceptions; (2) the email field stays on the form but isn't required, rather than being removed
+  outright (kept for optional admin-contact purposes). Matches the product's core stated mechanic
+  ("rank is purely the amount paid") more literally than the original design did — the old
+  email-match rule was explicitly documented as a weak, deliberately-temporary guest-identity model
+  in tech-spec.md, not a hard requirement. `listings.submitter_email` made nullable via a new
+  migration rather than dropped, since it's still collected (just unenforced) — additive, no data
+  loss for existing rows.
 - 2026-08-26 · **ZaloPay paused ("tạm disable"), SePay is now the active payment gateway** · user's
   explicit request, before ZaloPay's own live verification finished. "Disable" = un-wiring the two
   call sites (`pending-confirm.tsx`, `submit/route.ts`'s import) — no feature flag introduced
@@ -566,20 +616,27 @@ reflected back into the spec file. -->
   gracefully falls back to `"other"` without it, and F5's design already treats classifier
   correctness as non-critical since admin corrects it at approval), but should be resolved before
   trusting the suggestion quality in a real demo.
-- **SePay sandbox `SEPAY_MERCHANT_ID`/`SEPAY_SECRET_KEY` are in place** (user completed a sandbox
-  checkout) — resolved. Production credentials are a separate pair, not yet needed until the
-  end-to-end re-verification below passes and production cutover actually starts.
+- **RESOLVED: SePay production credentials/IPN config/webhook are all confirmed working** — real
+  production payments (`digilever.vn`) now correctly flow through checkout → IPN → RPC →
+  "Hàng chờ duyệt". Getting here needed 3 separate fixes (dashboard Auth Type, `SEPAY_SECRET_KEY`
+  sync, `order_amount` string coercion) — see the 2026-08-26/27 task log entry.
 - **ZaloPay credentials question is now moot while paused** — `ZALOPAY_APP_ID`/`KEY1`/`KEY2` were
   never added to `.env`/Vercel either; not a blocker unless ZaloPay is reactivated.
-- **Real webhook path not yet re-verified end-to-end since the migration was applied** — the
-  concurrency script proved the RPC itself works, but the actual SePay→IPN→`/api/webhooks/sepay`
-  path hasn't been re-tested since the fix (the one real payment the user completed happened while
-  the migration was still missing, so it never got past the RPC-call step) — see 2026-08-26 task log
-  entries and Next task above. Do one more real sandbox payment before trusting this in production.
-- **Unverified SePay facts, resolvable with the re-verification above**: whether `X-Secret-Key` is
-  really the only configured IPN auth option; the exact `currency` value expected (assumed `"VND"`);
-  whether SePay retries on a non-200 IPN response at all; whether `transaction.id` or
-  `transaction.transaction_id` is the right field for `gateway_txn_id`.
+- **Remaining unverified SePay facts** (low priority, nothing currently depends on them): whether
+  SePay retries on a non-200 IPN response indefinitely or a limited number of times (retries are
+  confirmed to happen at all — several pre-fix stuck bids self-resolved once the code was corrected,
+  with no new payment); whether `transaction.id` or `transaction.transaction_id` is the more
+  meaningful field for `gateway_txn_id` (both are populated in practice, either works). Confirmed,
+  no longer open: `X-Secret-Key` + dashboard Auth Type is the real IPN auth mechanism;
+  `order_amount` arrives as a string.
+- **Temporary diagnostic logging still in `app/api/webhooks/sepay/route.ts`** — added to catch the
+  bugs above, deliberately left in since it's cheap and non-sensitive (structural facts only, no
+  card data or full bodies), but should be removed once the team is confident no further SePay
+  debugging is needed.
+- **`supabase/migrations/20260827_listings_submitter_email_nullable.sql` written but not applied** —
+  needs explicit user confirmation before running, same as every prior migration. Blocks the
+  email-ownership-removal work above from being fully live (code changes are in place, but the DB
+  column still has `not null` until this runs).
 - The mock payment step (`app/api/payments/mock-confirm/`) is still live in production and always
   "succeeds" with no real charge — a real free-rank exploit until the real (now SePay) flow is
   live-verified end-to-end and this file is deleted (its call site in `pending-confirm.tsx` is

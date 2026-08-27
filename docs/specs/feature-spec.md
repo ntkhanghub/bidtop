@@ -167,22 +167,27 @@ demand.
   saving.
 
 ### F10 — Bid increase ("top-up") flow for existing listings
-As an existing listing owner, I want to pay only the difference to move up, without re-entering my
-whole listing.
+As anyone (not just whoever originally submitted the listing), I want to pay only the difference to
+move a listing up, without re-entering its whole content.
 
 **Acceptance criteria:**
-- Re-submitting the same normalized `identity_key` with a matching submitter email offers a
-  "top-up" flow instead of creating a duplicate listing.
+- Re-submitting the same normalized `identity_key` offers a "top-up" flow instead of creating a
+  duplicate listing. **No ownership check** — any submitter can top up any existing listing
+  regardless of who created it or what email (if any) they enter (user's explicit decision,
+  2026-08-27; see PROGRESS.md Decisions — supersedes the original email-match design below).
 - The submitter enters a target new total amount; the system computes
-  `delta = target_amount - current_amount` and requires `delta ≥ settings.min_increment`.
+  `delta = target_amount - current_amount` and requires `delta ≥ settings.min_increment`, and in all
+  cases `delta > 0` (a top-up can never reduce or no-op a listing's amount).
 - No one else can claim the rank slot a top-up is "reserving" by paying the same delta on a
   *different* identity — the delta only ever attaches to the specific `listing_id` that generated
   the checkout session; there is no window where the amount bump is claimable by anyone but the
   original listing.
 - A confirmed top-up re-sorts the leaderboard immediately (per F7) without changing
   `first_confirmed_at` and without re-entering moderation (per F8).
-- An email mismatch on a re-submitted `identity_key` is treated as a new-listing attempt for a
-  domain already owned by someone else and is rejected with a clear message (not silently merged).
+- Email is optional at checkout (both new listings and top-ups) — collected only for admin contact
+  purposes, never validated against anything. **Superseded:** an email mismatch on a re-submitted
+  `identity_key` used to be rejected as a new-listing attempt for a domain "owned" by someone else;
+  that check no longer exists.
 
 ## MVP cut line
 

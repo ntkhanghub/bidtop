@@ -248,7 +248,8 @@ PROGRESS.md
   inferred from client-sent state.
 
 ## Non-goals
-- No user accounts or login on the public side — guest checkout + email matching only. Supabase's
+- No user accounts or login on the public side — pure guest checkout, no ownership concept at all
+  (email is optional, never matched/validated — see PROGRESS.md Decisions, 2026-08-27). Supabase's
   Auth product is not used for this even though it's available in the same project.
 - No use of Supabase Storage or Realtime — Supabase is a Postgres host here, nothing else.
 - No integration with totnhat.com.vn or the "Vị trí tài trợ" Shopee/Lazada module (Nhóm 2) — that

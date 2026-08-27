@@ -20,7 +20,7 @@ type Listing = {
   display_url: string;
   identity_key: string;
   category_id: string;
-  submitter_email: string;
+  submitter_email: string | null;
   amount: number;
   status: ListingStatus;
   rejection_reason: string | null;
@@ -98,7 +98,9 @@ export function ListingRow({ listing, categories }: { listing: Listing; categori
           </span>
         </div>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">{listing.submitter_email}</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {listing.submitter_email ?? "(không có email)"}
+      </p>
 
       {listing.status === "rejected" && listing.rejection_reason && (
         <p className="mt-2 text-sm text-destructive">Lý do từ chối: {listing.rejection_reason}</p>

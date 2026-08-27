@@ -32,7 +32,7 @@ export interface Database {
           status: ListingStatus;
           amount: number;
           first_confirmed_at: string | null;
-          submitter_email: string;
+          submitter_email: string | null;
           rejection_reason: string | null;
           reviewed_by: string | null;
           reviewed_at: string | null;
@@ -49,7 +49,7 @@ export interface Database {
           status?: ListingStatus;
           amount?: number;
           first_confirmed_at?: string | null;
-          submitter_email: string;
+          submitter_email: string | null;
           rejection_reason?: string | null;
           reviewed_by?: string | null;
           reviewed_at?: string | null;

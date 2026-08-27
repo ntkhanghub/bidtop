@@ -18,7 +18,7 @@ type Listing = {
   id: string;
   display_url: string;
   category_id: string;
-  submitter_email: string;
+  submitter_email: string | null;
   amount: number;
 };
 type Category = { id: string; slug: string; name_vi: string };
@@ -87,7 +87,9 @@ export function QueueRow({ listing, categories }: { listing: Listing; categories
           </span>
         </div>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">{listing.submitter_email}</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {listing.submitter_email ?? "(không có email)"}
+      </p>
       <div className="mt-3 flex items-center gap-2">
         <Select value={categoryId} onValueChange={setCategoryId}>
           <SelectTrigger size="sm">
