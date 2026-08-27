@@ -203,8 +203,10 @@ Nhóm 2) — that is a distinct product for a later, separate effort.
 
 ## Backlog
 
-- **F15 — User accounts/dashboard:** revisit if guest email-matching for top-ups proves too weak
-  (spoofed emails, lost access) or if submitters ask for bid history.
+- **F15 — User accounts/dashboard:** revisit if the no-ownership guest model (2026-08-27: anyone can
+  top up any listing, no email match required — see F10) causes real abuse (e.g. griefing a
+  competitor's listing, or a listing's original submitter wanting exclusive control back), or if
+  submitters ask for bid history.
 - **F16 — "Vị trí tài trợ" for totnhat.com.vn:** separate product (Nhóm 2), Shopee/Lazada seller
   placements, different UX (emphasize sales volume/reviews, not raw bid amount), different
   identity-normalization logic (product IDs, not domains). Do not build inside this repo.

@@ -83,6 +83,13 @@ The submitter-can-override behavior (`categoryTouched` state) is verified by cod
 actual suggestion quality is not.
 
 ### S2-T5 — Draft listing + pending bid creation
+
+**2026-08-27 addendum — the email-match rule below was later removed.** The acceptance criteria and
+verified "Result" here accurately record what was built and tested at the time (email-match
+ownership for top-ups). That rule was removed entirely on 2026-08-27 (user's explicit decision, see
+`docs/specs/feature-spec.md` F10 and `PROGRESS.md` Decisions) — any submitter can now top up any
+listing, and email is optional. Left below as historical record, not rewritten.
+
 On valid submission, create (or reuse, for an existing `identity_key`) a `listings` row and a new
 `bids` row (`status = pending`, `delta_amount` = the entered amount minus current amount,
 `vat_amount` computed from `settings.vat_percent`), then redirect to a placeholder "proceeding to

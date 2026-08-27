@@ -53,6 +53,11 @@ VAT, content restrictions, manual-review policy) — not filler text.
 by reading from `settings`, not hardcoded copy.
 
 ### S5-T5 — Top-up UI flow
+
+**2026-08-27 addendum:** "matching email" below no longer applies — the email-match ownership rule
+was removed entirely (see `docs/specs/feature-spec.md` F10, `PROGRESS.md` Decisions). Any submitter
+can top up any listing; email is optional. Left as historical record, not rewritten.
+
 Public-facing version of Sprint 2's existing-`identity_key` + email-match top-up path, wired to
 Sprint 3's real payment flow.
 **Acceptance:** a listing owner re-entering their domain + matching email sees their current
