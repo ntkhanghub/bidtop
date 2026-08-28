@@ -23,6 +23,15 @@ export const CATEGORY_SLUGS = [
   "real-estate",
   "study-abroad",
   "food-restaurants",
+  "people-profiles",
+  "games-entertainment",
+  "ecommerce-retail",
+  "audio-voice-podcasting",
+  "security-privacy-compliance",
+  "domains-web-assets",
+  "leaderboards-attention",
+  "travel-local-lifestyle",
+  "web3-investing",
   "other",
 ] as const;
 

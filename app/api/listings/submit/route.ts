@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CATEGORY_SLUGS } from "@/lib/categorize";
 import { checkBannedPattern, resolveUrl } from "@/lib/content-validation";
+import { extractSiteMetadata } from "@/lib/extract-site-metadata";
 import { notifyNewSubmission } from "@/lib/email/notify";
 import { normalizeListingIdentity } from "@/lib/normalize-identity";
 import { buildGatewayOrderId } from "@/lib/payment/order-id";
@@ -45,8 +46,9 @@ export async function POST(request: Request) {
   }
 
   const trimmed = identity.trim();
+  const isHandle = trimmed.startsWith("@");
   let displayUrl: string;
-  if (trimmed.startsWith("@")) {
+  if (isHandle) {
     displayUrl = `https://x.com/${trimmed.slice(1)}`;
   } else {
     const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -115,6 +117,13 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    // Best-effort — only for brand-new listings (never re-extracted on a
+    // top-up) and never for @handle submissions (no public page to scrape,
+    // see PROGRESS.md Decisions).
+    const { title, logoUrl, description } = isHandle
+      ? { title: null, logoUrl: null, description: null }
+      : await extractSiteMetadata(displayUrl);
+
     const { data: created, error } = await supabase
       .from("listings")
       .insert({
@@ -123,6 +132,9 @@ export async function POST(request: Request) {
         category_id: category.id,
         submitter_email: email || null,
         status: "pending_payment",
+        title,
+        logo_url: logoUrl,
+        description,
       })
       .select("id")
       .single();

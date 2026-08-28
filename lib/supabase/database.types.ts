@@ -33,6 +33,9 @@ export interface Database {
           amount: number;
           first_confirmed_at: string | null;
           submitter_email: string | null;
+          title: string | null;
+          logo_url: string | null;
+          description: string | null;
           rejection_reason: string | null;
           reviewed_by: string | null;
           reviewed_at: string | null;
@@ -50,6 +53,9 @@ export interface Database {
           amount?: number;
           first_confirmed_at?: string | null;
           submitter_email: string | null;
+          title?: string | null;
+          logo_url?: string | null;
+          description?: string | null;
           rejection_reason?: string | null;
           reviewed_by?: string | null;
           reviewed_at?: string | null;

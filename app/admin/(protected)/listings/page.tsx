@@ -11,6 +11,8 @@ const STATUS_OPTIONS: { value: ListingStatus; label: string }[] = [
   { value: "approved", label: "Đã duyệt" },
   { value: "rejected", label: "Đã từ chối" },
   { value: "unpublished", label: "Đã gỡ" },
+  { value: "draft", label: "Nháp" },
+  { value: "pending_payment", label: "Chờ thanh toán" },
 ];
 
 // Plain native <select>s here (not the shadcn Select) — this form is a zero-JS
@@ -37,7 +39,7 @@ export default async function AdminListingsPage({
   let query = supabase
     .from("listings")
     .select(
-      "id, display_url, identity_key, category_id, submitter_email, amount, status, rejection_reason, unpublished_at, created_at",
+      "id, title, logo_url, description, display_url, identity_key, category_id, submitter_email, amount, status, rejection_reason, unpublished_at, created_at",
       { count: "exact" },
     )
     .eq("status", status)

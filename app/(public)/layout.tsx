@@ -14,7 +14,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-border">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4">
+        <div className="mx-auto flex max-w-[900px] items-center justify-between px-4 py-4">
           <Link href="/" className="text-lg font-bold text-primary">
             BidTop.vn
           </Link>

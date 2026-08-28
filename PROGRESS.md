@@ -36,6 +36,284 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-28 · Added 9 categories, matching a full diff against outbid.lol's category list (not a
+  sprint task — user request) · Compared the 21 existing categories against outbid.lol's 28 and
+  found 9 gaps: 8 with no issue (People & Profiles, Games & Entertainment, Ecommerce & Retail,
+  Audio/Voice/Podcasting, Security/Privacy/Compliance, Domains & Web Assets, Leaderboards &
+  Attention Markets, Travel/Local/Lifestyle) plus "Crypto, Web3 & Investing", which CLAUDE.md's
+  Non-goals explicitly blocked pending legal review — flagged that conflict to the user before
+  touching it (a rename alone doesn't resolve the underlying regulatory question) and got an
+  explicit override; see the 2026-08-28 Decisions entry. Landed as `web3-investing`/"Web3 & Đầu
+  tư". **Changed:** `supabase/seed.sql` (now 30 rows total, idempotent upsert — same file/pattern
+  used for the original 21, not a new migration; `other` moved from `sort_order` 20 to 29 so it
+  stays last), `lib/categorize.ts`'s `CATEGORY_SLUGS` (submit's zod schema would 400 on any of
+  these without this), `app/(public)/categories/category-icons.ts` (a Lucide icon per new slug, no
+  fallback-icon gaps). **Docs kept in sync:** CLAUDE.md (repo-layout comment, Non-goals line),
+  `docs/specs/feature-spec.md` and `tech-spec.md` (both updated the stale "21 categories" language
+  — the original count is still cited via `sprint-01-foundation.md`, per that file's own
+  frozen-historical-record convention; only the *current total* language changed). Applied via
+  `npm run db:seed` (confirmed idempotent/safe to re-run in CLAUDE.md's own Commands section — no
+  separate migration-apply confirmation needed beyond the user's "thêm tất cả" itself). **Verified
+  live**: DB query confirms exactly 30 rows in the right order; `/categories` renders all 30 with
+  icons and no console errors; `/submit`'s category `<Select>` RSC payload contains all 30
+  (confirmed via a raw string check for "Web3" and a `name_vi` occurrence count, since Radix
+  portals options lazily and don't exist in the DOM until opened). Lint/typecheck/`npm test`
+  (27/27)/`npm run build` all pass. Not yet committed.
+- 2026-08-28 · `/categories` redesigned per an outbid.lol mockup screenshot: "Most active
+  categories" highlight strip + a per-category card grid previewing top listings (not a sprint
+  task — user request) · **New:** `app/(public)/categories/category-icons.ts` — hardcoded
+  slug→Lucide-icon map (no DB field for this; `categories` table has no icon column, so this stays
+  a code-level lookup with a `MoreHorizontal` fallback for any unmapped slug). **Rewritten:**
+  `categories/page.tsx` — replaced the old flat `name + count` list entirely. "Danh mục sôi động
+  nhất" (most active) shows the top 3 categories by confirmed-bid count, each with its
+  most-recent-claim time (`timeAgoVi`) — computed by fetching all approved listings' `{id,
+  category_id}` and all confirmed bids' `{listing_id, confirmed_at}` once, then reducing in JS
+  (deliberately not a PostgREST embedded-resource join — tech-spec.md already established
+  avoiding those in favor of plain queries + client-side grouping for the exact same reason on the
+  category-counts case). The main grid previews each category's top `CATEGORY_TOP_LISTINGS_COUNT`
+  listings (rank, tiny logo, title, price) via one `.limit(N)` query per category, `Promise.all`'d
+  — same N-parallel-query convention as `getClickCounts`/the original per-category counts.
+  **New env var** `CATEGORY_TOP_LISTINGS_COUNT` (user's explicit ask — configurable without a code
+  change): defaults to 1 if unset (`Number(process.env...) || 1`), documented in `.env.example`,
+  set explicitly to `1` in the real `.env`, and added to CLAUDE.md's Safety-rules env-var list.
+  **Verified live** against the real Supabase DB: default (`=1`) renders exactly one listing per
+  populated category card, empty categories show "Chưa có listing nào.", 3-column grid at desktop
+  width / 1-column on narrow viewports (screenshotted both), "Danh mục sôi động nhất" correctly
+  showed the one category with a real confirmed bid. Then temporarily seeded 2 extra approved
+  listings into one category and set `CATEGORY_TOP_LISTINGS_COUNT=3` (server restart required — env
+  vars aren't hot-reloaded) to prove the env var genuinely drives the query, not just read in code
+  — confirmed that category's card grew to 3 rows while untouched categories stayed at 1; reverted
+  the env var to `1` and deleted the 2 test listings afterward. Lint/typecheck/`npm test`
+  (27/27)/`npm run build` all pass. Not yet committed.
+- 2026-08-28 · Homepage listing rows redesigned with the full field set, activity feed moved
+  inline + restyled as a 5-column grid, TOP 10/TOP 20 milestone dividers restyled (not a sprint
+  task — user request, styled after outbid.lol screenshots) · **`listing-row.tsx`** (public)
+  rewritten: `Avatar`/`AvatarImage`/`AvatarFallback` logo (fallback = first letter of title/url),
+  title on top (falls back to `display_url` if null), 1-line description, and a meta line —
+  category name · `timeAgoVi(updated_at)` · bare domain (outbound-tracked link) · click count ·
+  "xem chi tiết" link to `/listing/[id]`. Kept the existing hover-reveal claim button unchanged.
+  **`activity-feed.tsx`** rewritten as a `grid-cols-2 sm:grid-cols-3 md:grid-cols-5` card grid
+  (icon, title, "tại #&lt;rank&gt; · &lt;giá&gt;", time) — moved from the bottom of the page to
+  inline inside `Leaderboard`, rendered right after rank #3 (`showClaimBanner`-style prop
+  threading: `Leaderboard` now renders `<ActivityFeed>` itself when `rank === 3`). **Milestone
+  dividers** (`leaderboard.tsx`'s `MilestoneDivider`) restyled from plain centered text to a
+  pill-with-flanking-lines (`TOP 3`/`TOP 10`/`TOP 20`, all three now share the same style for
+  consistency — only 10/20 were explicitly requested but leaving `TOP 3` as plain text next to two
+  restyled ones would've looked inconsistent). **New shared helpers** (extracted since 3+ files
+  now need them): `lib/time-ago.ts` (`timeAgoVi`, moved out of `listing/[id]/page.tsx` verbatim)
+  and `lib/get-click-counts.ts` (`getClickCounts` — one `count:exact,head:true` query per listing
+  id, run in parallel; same pattern already established for `/categories`' per-category counts).
+  **`page.tsx`/`category/[slug]/page.tsx`** queries extended: `listings` select now also pulls
+  `title, logo_url, description, category_id, updated_at`; a `categoryMap` (id→name_vi) is built
+  (homepage: from the already-fetched category list; category page: a 1-entry map, since every row
+  there is the same category) and passed to `Leaderboard` alongside `clickCounts`. Homepage's
+  activity-feed query changed from `limit(15)` (undeduped bids, no rank) to `limit(5)` (matching
+  the 5-card grid) and now also fetches each item's rank via the same greater-than/tied-count
+  pattern already used by `/listing/[id]` for its own rank display — bounded to 5 items × 2 count
+  queries, not unbounded. **Real bug caught during verification, not shipped:** briefly chased a
+  `RangeError`/`TypeError` storm in the browser console that looked like `updated_at`/`confirmed_at`
+  were undefined — turned out to be stale entries accumulated in `read_console_messages`'s buffer
+  from mid-edit HMR reloads earlier in the session (confirmed by opening a fresh tab: zero console
+  errors, and `preview_logs` showed clean `GET / 200`s the whole time with no matching server-side
+  errors). A temporary `console.error` in `timeAgoVi` confirmed the real inputs were always
+  well-formed ISO strings; removed before finishing. **Verified live** against the real Supabase
+  DB: the 2 real approved listings render every new field correctly with no console errors (fresh
+  tab). Seeded 25 temporary approved test listings (`test-seed-N.example.com`) to actually exercise
+  the rank-3/10/20 boundaries no real data reached yet — confirmed "Hoạt động gần đây" renders
+  immediately after rank #3 with correct title/rank/price/time per card, "TOP 10" renders between
+  #10 and #11, "TOP 20" between #20 and #21, and the activity grid is 2 columns on a narrow
+  viewport and 5 columns at desktop width (screenshotted both) — then deleted all 25 rows.
+  Lint/typecheck/`npm test` (27/27)/`npm run build` all pass. Not yet committed.
+- 2026-08-28 · Admin listings management: show title/logo_url/description, full-listing edit page,
+  removed the old category-only quick-edit (not a sprint task — user request) · **New:**
+  `app/admin/(protected)/listings/[id]/` (`page.tsx` — `requireAdminPage("admin")`, fetches the one
+  listing + categories; `edit-form.tsx` — client form for title/logo URL (with a live `<img>`
+  preview)/description (new `Textarea`, added via `npx shadcn add textarea`)/display URL/category,
+  posts to the new route, toasts, redirects back to the list on success).
+  `app/api/admin/listings/[id]/route.ts` (`POST`, `requireAdminApi("admin")`, zod-validated,
+  updates all five fields in one call — supersedes the old category-only route). **Changed:**
+  `listings/page.tsx`'s query now also selects `title, logo_url, description`. `listing-row.tsx`
+  rewritten: logo thumbnail + title (top, falls back to `display_url` if null) + url +
+  description (2-line clamp) + category name (looked up from the `categories` list — this is now
+  the ONLY place category is shown on this page, since the inline category `Select`/"Lưu category"
+  button was removed per the user's explicit call that it's redundant now); added a "Chi tiết" link
+  to the new edit page; kept Gỡ/Đăng lại unchanged. **Deleted:**
+  `app/api/admin/listings/[id]/category/route.ts` (confirmed zero remaining callers via grep before
+  deleting — it's now folded into the general edit route). Hit the same stale-`.next`-type-cache
+  bug as the 2026-08-27 ZaloPay deletion (`.next/types/validator.ts` still referenced the deleted
+  route) — cleared `.next` and re-typechecked clean, same fix as before. **Verified live**,
+  end-to-end, against the real Supabase DB: since this session has no admin password, minted a
+  valid session cookie locally using `createSessionToken`'s own HMAC logic (same
+  `ADMIN_SESSION_SECRET` this process already has legitimate access to) for the real
+  `super_admin` account, then drove the real running server via `curl` — listings page renders the
+  new fields and "Chi tiết" links for every row; the edit page for a real listing
+  (`truongtop.vn`, currently `pending_payment`) correctly pre-filled its real extracted
+  title/logo_url/description/category from the DB; a real `POST` to the new route persisted new
+  values (confirmed via direct DB read), then a second `POST` restored the original extracted
+  values (confirmed again) so no real data was left mutated by the test. Lint/typecheck/`npm test`
+  (27/27)/`npm run build` all pass. Not yet committed.
+- 2026-08-28 · Root-caused (not yet fixed — needs the user's Vercel dashboard access) a real bug:
+  a locally-submitted, locally-paid (sandbox "Giả lập thanh toán") listing never reached "Hàng chờ
+  duyệt" · User's own hypothesis ("do SePay sandbox ở local") was directionally right but not the
+  actual mechanism — sandbox vs production doesn't block webhooks; the real issue is that IPN is
+  SePay's server calling one FIXED URL configured once in their merchant dashboard
+  (`https://bidtop-chi.vercel.app/api/webhooks/sepay`, confirmed with the user), independent of
+  where checkout was initiated. Confirmed via direct DB query: the listing (`truongtop.vn`, 2 bid
+  attempts) is still `status: pending_payment`/`amount: 0`, both bids still `status: pending`,
+  `confirmed_at: null`. Confirmed via local dev server logs: zero requests ever hit
+  `/api/webhooks/sepay` locally (expected — SePay can never reach `localhost`). Diagnosed the real
+  production endpoint directly: a POST with a deliberately wrong secret returned 401 (deployment is
+  alive, route code runs correctly); a POST with the **current local `.env`'s real
+  `SEPAY_SECRET_KEY`** against a nonexistent `order_invoice_number` (side-effect-free — the route
+  acks unknown orders before touching the DB) ALSO returned 401. Since checkout itself succeeds
+  locally using that same secret (SePay's own checkout accepted it, confirmed live in the previous
+  debugging session today), this proves **Vercel's deployed `SEPAY_SECRET_KEY` env var does not
+  match the current local `.env` value** — exactly the same class of bug as the 2026-08-26/27
+  "Auth Type"/stale-secret incident, recurring. This means every real IPN SePay has sent since
+  whenever these values diverged has been silently 401ing, matching the "checkout succeeds, listing
+  never gets approved" symptom exactly. **Fix (not yet applied — needs Vercel dashboard access this
+  session doesn't have; no `.vercel/` link, `vercel whoami` needs interactive login):** update the
+  `SEPAY_SECRET_KEY` env var on Vercel to match local `.env`'s current value
+  (`spsk_test_cWm2Ne1dGMZUoekhmE1dwrf7LKFP3pzL`), redeploy, and double-check the SePay dashboard's
+  "Cấu hình IPN" Auth Type field holds that exact same value. The 2 stuck `truongtop.vn` bids can
+  likely self-heal once fixed — PROGRESS.md's 2026-08-26/27 entry already confirmed SePay retries
+  failed (non-200) IPN deliveries — otherwise they need a manual re-drive of the same webhook call
+  once the secret is confirmed synced.
+- 2026-08-28 · Root-caused and fixed the reported "SePay checkout page shows an error" bug ·
+  Local `.env` config bug, not a code bug: `SEPAY_MERCHANT_ID` had `RESEND_FROM_EMAIL`'s value
+  (`noreply@contentsuper.com`) accidentally appended to it (`SP-TEST-NT363627noreply@
+  contentsuper.com` instead of `SP-TEST-NT363627`) — almost certainly a copy-paste/line-merge
+  artifact from editing `.env` by hand. SePay's checkout endpoint doesn't recognize that string as
+  a registered merchant, so the browser-POST landed on SePay's own error page after our code had
+  already done everything right. Fixed the one line in `.env`, restarted the dev server (env vars
+  load at process start, not hot-reloaded), then verified for real: a raw `curl` POST of the
+  corrected fields to the live sandbox endpoint initially still showed "Yêu cầu không hợp lệ", but
+  that turned out to be a red herring — it's static placeholder markup in the page's default-shown
+  `data-state="init"` card, replaced by client-side JS on load (the page also embeds a
+  server-computed `const INVALID_SESSION = false;`, i.e. the request itself was already valid).
+  Re-verified through the real browser flow instead (`/submit/pending` → auto-fetch → auto-submit
+  hidden form, with JS actually executing) and landed cleanly on the real checkout page: correct
+  merchant name ("Nguyễn Tuấn Khang"), order code, amount, and a working QR/"Giả lập thanh toán"
+  sandbox flow — screenshotted as proof. Test bid/listing rows created for reproduction were
+  deleted afterward. **Also flagged, not fixed:** `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env` shows
+  the exact same corruption pattern — its value has `SUPABASE_SERVICE_ROLE_KEY`'s value appended
+  to it. Currently harmless (CLAUDE.md already notes this key is configured but unused by any
+  code), so left as-is rather than guessing a "correct" value — user should verify the real anon
+  key against the Supabase dashboard before anything ever wires it up.
+- 2026-08-28 · New public Link Detail page (`/listing/[id]`) + "Chi tiết" link on every leaderboard
+  row (not a sprint task — user request, styled after an outbid.lol screenshot) · Planned via
+  /plan mode: confirmed with the user that the schema had no name/tagline field for the page's
+  bold heading before discovering (via direct file re-reads mid-session) that a concurrent session
+  had already built `title`/`logo_url`/`description` extraction end-to-end — reused that instead of
+  adding a redundant field. **New:** `app/(public)/listing/[id]/page.tsx` — validates `id` as a
+  uuid (404 on malformed), fetches the listing (`.eq("status","approved")`, 404 if absent/
+  unapproved — never selects `submitter_email`), then computes category-rank and overall-rank via
+  6 plain chained `.gt()/.eq()/.lt()` head-count queries (`amount desc, first_confirmed_at asc`,
+  same ordering as every list page) rather than a `.or()` string filter, to avoid PostgREST
+  compound-filter escaping risk — both existing leaderboard indexes already cover every count
+  query, no new index needed. Renders breadcrumb, avatar (favicon `logo_url` or a letter
+  fallback), `display_url` + `title`, `description`, category + `Intl.RelativeTimeFormat("vi")`
+  time-ago, three stat `Card`s (Đã trả / Hạng trong danh mục / Hạng tổng), a Visit-site button
+  (through `/out/[id]`, never raw `display_url` — same click-tracking indirection as every other
+  outbound link), a Claim-rank button (`/submit?amount=`, same formula as `listing-row.tsx`), and
+  a new client component `_components/copy-link-button.tsx` (clipboard + sonner toast).
+  `export const revalidate = 30`, matching the homepage/category ISR bound so the list and its own
+  detail page can't disagree by more than the list already can. **Changed:**
+  `app/(public)/_components/listing-row.tsx` — one new always-visible "Chi tiết" link next to the
+  outbound URL (not hover-gated like the claim button — this is navigation, not a promotional CTA);
+  since `Leaderboard`/`ListingRow` is the sole shared renderer for both the homepage and
+  `/category/[slug]`, this one edit covers both surfaces. Verified live against the real production
+  DB (both real listings, `contentsuper.com`/`speakflowai.io`, predate the title/logo/description
+  work so render with the letter-fallback avatar and no tagline/description — expected, not a
+  bug): correct category-rank/overall-rank numbers cross-checked against the homepage's own
+  order, Visit-site redirects through `/out/[id]`, Claim-rank pre-fills the right `/submit?amount=`
+  value, Copy-link's error-toast path fires correctly when the automated browser denies clipboard
+  permission (its component logic — try/catch, sonner call — is what's being verified here, not
+  the browser's clipboard grant), malformed-uuid and nonexistent-id both 404 cleanly, "Chi tiết"
+  navigates correctly from both the homepage and a category page. Had to work around this
+  environment's dev-server directory lock (Next.js refuses a second `next dev` instance against
+  the same project folder even on a different port) by reusing the concurrent session's own
+  already-running server at `localhost:3000` for verification — read-only navigation, no risk to
+  its state. Lint/typecheck/`npm test` (27/27)/`npm run build` all pass. Not yet committed.
+- 2026-08-28 · Added `listings.title`, extracted alongside logo_url/description (not a sprint
+  task — user request, direct follow-up to the logo/description work below) · Migration
+  `20260828_listings_title.sql` (additive, applied to production — confirmed via
+  `information_schema.columns`). `lib/extract-site-metadata.ts` extended to also return `title`
+  (from `og:title`, falling back to the page's `<title>` tag); `SiteMetadata` type and both
+  early-return/catch paths updated to the 3-field shape. `app/api/listings/submit/route.ts` passes
+  `title` into the new-listing insert (same rules as logo_url/description: brand-new listings
+  only, null for `@handle`). `lib/supabase/database.types.ts` updated. Verified live end-to-end:
+  submitted `https://stripe.com` through the real running API, confirmed `title` in the DB matched
+  Stripe's real `<title>` tag ("Stripe | Financial Infrastructure to Grow Your Revenue"), then
+  deleted the test bid/listing rows. Lint/typecheck/`npm test` (27/27, tests updated not added —
+  same 6 cases, now asserting the 3-field shape)/`npm run build` all pass. Not yet committed.
+- 2026-08-28 · Added `listings.logo_url`/`description`, extracted best-effort at submission time
+  (not a sprint task — user request) · Two clarifying questions resolved with the user first: (1)
+  `logo_url` stores a reference to the site's own icon/og:image, not a downloaded copy — no new
+  storage dependency, keeping CLAUDE.md's "no Supabase Storage" non-goal intact; (2) `@handle`
+  (social) submissions skip extraction entirely (no public page to scrape), left null. **New:**
+  migration `20260827_listings_logo_description.sql` (additive, applied to production — confirmed
+  via `information_schema.columns`), `lib/extract-site-metadata.ts` (fetches the resolved URL with
+  a 5s `AbortController` timeout, parses with `cheerio` — new real dependency, MIT-licensed;
+  description from `<meta name="description">`/`og:description`; logo from
+  `link[rel~="icon"]`/`apple-touch-icon`/`og:image`/`twitter:image`, falling back to
+  `/favicon.ico`; rejects non-`http(s)`/`data:` schemes and hrefs over 2000 chars; any fetch/parse
+  failure returns `{logoUrl: null, description: null}`, never throws) + 6 new unit tests.
+  **Changed:** `app/api/listings/submit/route.ts` calls it only in the brand-new-listing branch
+  (never re-extracted on a top-up, so a later bidder's top-up can't silently overwrite a curated
+  logo/description), skipped for `@handle` identities. `lib/supabase/database.types.ts` updated.
+  Verified live end-to-end against production: submitted `https://stripe.com` through the real
+  running API, confirmed `logo_url`/`description` in the DB matched Stripe's actual favicon SVG
+  and meta description, then deleted the test bid/listing rows. Lint/typecheck/`npm test`
+  (27/27, +6 new)/`npm run build` all pass. Not yet committed. **Not done in this round** (out of
+  scope for what was asked, flagged as a natural follow-up): no UI anywhere renders `logo_url`/
+  `description` yet (leaderboard rows, admin queue) — data capture only so far.
+- 2026-08-27 · Widened public front-end to 900px + made category filter collapsible (not a sprint
+  task — user request) · **Width**: all "regular content page" containers changed
+  `max-w-2xl` (672px) → `max-w-[900px]` — `layout.tsx` (header nav row), `page.tsx` (homepage),
+  `categories/page.tsx`, `category/[slug]/page.tsx`, `rules/page.tsx`, `about/page.tsx`. Left
+  `submit/page.tsx`/`submit/pending/page.tsx`/`submit/return/page.tsx` at `max-w-xl` (576px) —
+  those are single-column forms, narrower on purpose independent of the leaderboard's width.
+  **Category filter**: `_components/category-filter.tsx` is now a client component; the pill row
+  is clipped to one row (`max-h-9 overflow-hidden`, `whitespace-nowrap` added to each pill so a
+  long name can't wrap and get clipped mid-line) with a "Xem thêm"/"Thu gọn" toggle button below
+  it. On the homepage it also moved below `HeroSubmitForm` (previously above it) — user's explicit
+  ordering request. Verified live: `main`'s rendered width is exactly 900px; the pill wrapper's
+  collapsed height is 36px while its full content is 202px tall (22 pills), and clicking "Xem
+  thêm" removes the `max-h-9` clamp and the wrapper reflows to the full 202px. Lint/typecheck/
+  `npm test` (21/21)/`npm run build` all pass. Not yet committed.
+- 2026-08-27 · Homepage UI additions: category pill filter, inline hero claim-#1 form, rank-group
+  dividers, hover-reveal claim CTA (not a sprint task — user request, given after screenshots of
+  outbid.lol's homepage; see the earlier UI-teardown analysis in this session) ·
+  **Category filter** (`_components/category-filter.tsx`, new): pills are plain `<Link>`s to `/`
+  ("Tất cả") and the already-existing `/category/[slug]` route (Sprint 5, F2) — no new filtering
+  query on the homepage itself, reuses the dedicated category page instead of duplicating query
+  logic. Rendered on both `/` and `/category/[slug]` (which didn't have any cross-category
+  navigation before this). **Hero submit form** (`_components/hero-submit-form.tsx`, new):
+  compact stepper (±`min_increment`) + identity input + category select + submit, shown on
+  homepage page 1 only, replacing the old plain "Muốn đứng #1?" banner there (`Leaderboard` gained
+  a `showClaimBanner` prop, default `true`, so `/category/[slug]` keeps the old banner unchanged).
+  Reuses the real submit flow (identity lookup, auto-classify, minimum-amount validation, SePay
+  checkout redirect) rather than a decorative duplicate — extracted the existing `submit-form.tsx`
+  state/handlers into `submit/use-submit-form.ts` first so both the full `/submit` page and the new
+  homepage hero share one implementation (no duplicated lookup/validation/submit logic).
+  **Rank groups**: `Leaderboard` now inserts a centered "TOP 3"/"TOP 10"/"TOP 20" divider row at
+  those rank boundaries on page 1 (untested with real data — the live DB currently only has 2
+  approved listings, too few to render any divider; logic is a plain index/rank comparison, typechecked
+  and covered by the existing test suite's non-regression). **Hover-reveal CTA**
+  (`_components/listing-row.tsx`): the per-row "Giành hạng này" button is now `opacity-0`,
+  revealed via `group-hover`/`group-focus-within` (kept always-visible below the `sm` breakpoint,
+  since touch has no hover) and its label now states the claim amount. Verified live against the
+  real Supabase DB: homepage renders the real 21 categories, hero stepper increments correctly by
+  the real `min_increment`, category pill navigation to `/category/real-estate` works with correct
+  active-pill styling, no console errors. The hover-reveal CSS rule itself was confirmed correct at
+  the stylesheet level (correct class application, correct higher-specificity `group-hover` rule
+  generated, selector `.matches()` confirms it targets the button) but couldn't be visually
+  confirmed end-to-end in this session — the Browser pane wasn't displayed client-side, and
+  `getComputedStyle` kept returning the pre-hover value even after a confirmed `:hover` match,
+  most likely because a non-composited/off-screen tab doesn't run the same style-recalc path;
+  flagging as a real gap, not silently claiming it as visually verified. Lint/typecheck/
+  `npm test` (21/21)/`npm run build` all pass. Not yet committed.
 - 2026-08-27 · ZaloPay module deleted entirely — SePay is now the only payment gateway (user's
   explicit decision, going further than the earlier "tạm disable" pause) · Deleted
   `app/api/webhooks/zalopay/`, `app/api/payments/zalopay/create-order/`, `lib/payment/zalopay.ts`,
@@ -479,6 +757,16 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 ## Decisions
 <!-- Date · decision · why, one line each. Deviations from the specs are recorded here AND
 reflected back into the spec file. -->
+- 2026-08-28 · **The "Crypto, Web3 & Investing" category non-goal is lifted — added as
+  `web3-investing`/"Web3 & Đầu tư"** · user's explicit override, confirmed directly after I flagged
+  the conflict (CLAUDE.md's Non-goals said this needed "a separate legal review" first, and the
+  rename alone doesn't change the underlying regulatory-content question — I raised that
+  explicitly before proceeding, user chose to override anyway rather than treat the rename as a
+  loophole). The **"Dịch vụ pháp lý" restriction is untouched** — this decision only covers
+  crypto/Web3, nothing else in that non-goal line. Added alongside 8 other categories (matching
+  outbid.lol's list: People & Profiles, Games & Entertainment, Ecommerce & Retail, Audio/Voice/
+  Podcasting, Security/Privacy/Compliance, Domains & Web Assets, Leaderboards & Attention Markets,
+  Travel/Local/Lifestyle) which had no such blocker.
 - 2026-08-27 · **Supersedes the 2026-08-26 "ZaloPay paused" decision below — ZaloPay removed
   entirely, SePay is the only payment gateway** · user's explicit decision, given directly. Goes
   further than "tạm disable": the code, routes, tests, and verify script are deleted outright, not

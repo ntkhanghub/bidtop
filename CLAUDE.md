@@ -79,6 +79,12 @@ ceremony.
   to sandbox if unset (see PROGRESS.md Decisions). ZaloPay was built first, briefly active, then
   paused, then removed entirely (user's explicit call) — see PROGRESS.md Decisions.
 - Claude API (Haiku) — one-shot category classification at submission time
+- `cheerio` — parses the submitted site's HTML to extract `listings.title`/`logo_url`/
+  `description` (`lib/extract-site-metadata.ts`) at submission time, brand-new listings only.
+  Best-effort: any fetch/parse failure just leaves all three null, never blocks a submission.
+  `logo_url` is a reference to the site's own icon/og:image, not a downloaded copy — no image
+  bytes are stored ourselves (see Non-goals' "no Supabase Storage"). Skipped entirely for
+  `@handle` (social) submissions — no public page to scrape.
 - Vercel — hosting, zero-ops
 - No end-user auth system. Admin auth only: stateless HMAC-signed httpOnly session cookie
   (`lib/auth/session.ts`, no sessions table) + argon2id password hash (`@node-rs/argon2`, chosen
@@ -99,6 +105,10 @@ app/
                                # return/ is S3-T3's display-only browser-return handler (no DB writes),
                                # branches on our own ?outcome= param, not gateway-supplied query data
     categories/, category/[slug]/  # S5 — category browsing (F2)
+    listing/[id]/              # single-listing detail page (not a sprint task — user request):
+                               # title/logo/description, category+overall rank (computed via
+                               # count queries, no DB rank column), Visit/Claim/Copy-link buttons.
+                               # _components/copy-link-button.tsx is its one client subcomponent.
     rules/, about/            # S5 — static pages (F3); about/ has a real-copy TODO placeholder
     _components/               # listing-row, leaderboard, activity-feed, online-counter (client)
   admin/(protected)/          # S4 — login-gated: pending queue (/admin), listings management
@@ -126,13 +136,16 @@ lib/
     server.test.ts
     database.types.ts         # hand-written Database type — keep in sync with SQL by hand
   normalize-identity.ts       # (planned, S2) canonical identity_key logic
+  extract-site-metadata.ts    # best-effort title/logo_url/description extraction (cheerio), new
+                               # listings only, never for @handle submissions
   payment/order-id.ts         # bids.gateway_order_id generator
   payment/sepay.ts            # sepay-pg-node SDK wrapper, checkout signing, IPN verification
   categorize.ts               # (planned, S2) LLM category classifier
 supabase/
   migrations/                 # raw SQL, applied manually — see Commands. Never re-run the
                                # init migration after real data exists; it DROPs tables.
-  seed.sql                    # 21 launch categories + default settings (idempotent, upsert-based)
+  seed.sql                    # 30 categories (21 launch + 9 added 2026-08-28) + default settings
+                               # (idempotent, upsert-based)
 scripts/
   apply-migration.mjs         # runs one SQL file against DIRECT_URL — dev tooling only
 docs/{specs,sprints}/
@@ -190,7 +203,9 @@ PROGRESS.md
   sandbox) — the only payment gateway, see `lib/payment/sepay.ts`;
   `ADMIN_SESSION_SECRET` — signs the admin session cookie, see
   `lib/auth/session.ts`; `RESEND_API_KEY`, `ADMIN_NOTIFICATION_EMAIL`, `RESEND_FROM_EMAIL` —
-  admin email notifications, see `lib/email/notify.ts`, all three silently no-op if unset); keep
+  admin email notifications, see `lib/email/notify.ts`, all three silently no-op if unset);
+  `CATEGORY_TOP_LISTINGS_COUNT` — not a secret, just a tunable: how many top listings each
+  `/categories` card previews, defaults to 1 if unset, see `app/(public)/categories/page.tsx`; keep
   `.env.example` current and `.env` gitignored. If a secret ever lands in a commit, stop and tell
   the user — rotating it is their call.
 - Ask before anything destructive or hard to reverse: dropping/altering DB tables with data,
@@ -238,8 +253,10 @@ PROGRESS.md
 - No use of Supabase Storage or Realtime — Supabase is a Postgres host here, nothing else.
 - No integration with totnhat.com.vn or the "Vị trí tài trợ" Shopee/Lazada module (Nhóm 2) — that
   is a separate product; do not build it in this repo.
-- No "Dịch vụ pháp lý" or "Crypto, Web3 & Investing" categories until a separate legal review is
-  done — do not add either as a quick category-list edit.
+- No "Dịch vụ pháp lý" category until a separate legal review is done — do not add it as a quick
+  category-list edit. (The matching "Crypto, Web3 & Investing" restriction was lifted 2026-08-28 —
+  user's explicit override, added as `web3-investing`/"Web3 & Đầu tư"; see PROGRESS.md Decisions.
+  "Dịch vụ pháp lý" itself is untouched by that decision.)
 - No automated refunds and no ML-based NSFW detection in the MVP — rejected listings are refunded
   manually; content safety relies on manual admin review (`docs/sprints/sprint-04-admin-moderation.md`).
 - No third-party analytics vendor in the MVP — the footer revenue counter and online count are

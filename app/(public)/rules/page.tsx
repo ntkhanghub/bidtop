@@ -10,7 +10,7 @@ export default async function RulesPage() {
   const settings = Object.fromEntries((settingsRows ?? []).map((s) => [s.key, Number(s.value)]));
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-12">
+    <main className="mx-auto max-w-[900px] px-4 py-12">
       <h1 className="text-2xl font-bold text-foreground">Luật chơi</h1>
       <div className="mt-4 flex flex-col gap-4 text-foreground/80">
         <p>

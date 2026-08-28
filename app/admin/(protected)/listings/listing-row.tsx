@@ -1,22 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { ListingStatus } from "@/lib/supabase/database.types";
 
 type Listing = {
   id: string;
+  title: string | null;
+  logo_url: string | null;
+  description: string | null;
   display_url: string;
   identity_key: string;
   category_id: string;
@@ -39,17 +36,12 @@ const STATUS_BADGE: Record<ListingStatus, { label: string; className: string }> 
 
 export function ListingRow({ listing, categories }: { listing: Listing; categories: Category[] }) {
   const router = useRouter();
-  const [categoryId, setCategoryId] = useState(listing.category_id);
   const [submitting, setSubmitting] = useState(false);
 
-  async function post(path: string, body?: unknown) {
+  async function post(path: string) {
     setSubmitting(true);
     try {
-      const res = await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
-      });
+      const res = await fetch(path, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error ?? "Không thực hiện được.");
@@ -63,11 +55,6 @@ export function ListingRow({ listing, categories }: { listing: Listing; categori
     }
   }
 
-  async function handleSaveCategory() {
-    await post(`/api/admin/listings/${listing.id}/category`, { categoryId });
-    toast.success("Đã lưu category");
-  }
-
   async function handleUnpublish() {
     await post(`/api/admin/listings/${listing.id}/unpublish`);
     toast.success("Đã gỡ listing");
@@ -79,18 +66,37 @@ export function ListingRow({ listing, categories }: { listing: Listing; categori
   }
 
   const statusBadge = STATUS_BADGE[listing.status];
+  const categoryName = categories.find((c) => c.id === listing.category_id)?.name_vi ?? "—";
 
   return (
     <Card className="p-4">
-      <div className="flex items-center justify-between gap-3">
-        <a
-          href={listing.display_url}
-          target="_blank"
-          rel="noreferrer"
-          className="font-medium text-foreground hover:underline"
-        >
-          {listing.display_url}
-        </a>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          {listing.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={listing.logo_url}
+              alt=""
+              className="mt-0.5 size-8 shrink-0 rounded-md border border-border object-contain"
+              onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+            />
+          ) : (
+            <div className="mt-0.5 size-8 shrink-0 rounded-md border border-border bg-muted" />
+          )}
+          <div className="min-w-0">
+            <p className="truncate font-medium text-foreground">
+              {listing.title ?? listing.display_url}
+            </p>
+            <a
+              href={listing.display_url}
+              target="_blank"
+              rel="noreferrer"
+              className="truncate text-sm text-muted-foreground hover:underline"
+            >
+              {listing.display_url}
+            </a>
+          </div>
+        </div>
         <div className="flex shrink-0 items-center gap-2">
           <Badge className={statusBadge.className}>{statusBadge.label}</Badge>
           <span className="font-mono text-sm tabular-nums text-muted-foreground">
@@ -98,8 +104,13 @@ export function ListingRow({ listing, categories }: { listing: Listing; categori
           </span>
         </div>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {listing.submitter_email ?? "(không có email)"}
+
+      {listing.description && (
+        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{listing.description}</p>
+      )}
+
+      <p className="mt-2 text-sm text-muted-foreground">
+        {listing.submitter_email ?? "(không có email)"} · {categoryName}
       </p>
 
       {listing.status === "rejected" && listing.rejection_reason && (
@@ -112,20 +123,8 @@ export function ListingRow({ listing, categories }: { listing: Listing; categori
       )}
 
       <div className="mt-3 flex items-center gap-2">
-        <Select value={categoryId} onValueChange={setCategoryId}>
-          <SelectTrigger size="sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name_vi}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button onClick={handleSaveCategory} disabled={submitting} variant="outline" size="sm">
-          Lưu category
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/admin/listings/${listing.id}`}>Chi tiết</Link>
         </Button>
 
         {listing.status === "approved" && (

@@ -64,9 +64,10 @@ timeouts.
 Managed as raw SQL in `supabase/migrations/` (not an ORM schema) — `id` columns are Postgres
 `uuid default gen_random_uuid()`, not application-generated IDs.
 
-- **`categories`** — `id`, `slug`, `name_vi`, `sort_order`. Seeded with the 21 launch categories
-  (Sprint 1, see S1-T5 in `docs/sprints/sprint-01-foundation.md` for the authoritative list;
-  `supabase/seed.sql` is the actual applied source).
+- **`categories`** — `id`, `slug`, `name_vi`, `sort_order`. Seeded with the original 21 launch
+  categories (Sprint 1, see S1-T5 in `docs/sprints/sprint-01-foundation.md` for that list) plus 9
+  more added 2026-08-28 to match outbid.lol's category list (30 total) — `supabase/seed.sql` is
+  the actual applied source for the current full set.
 - **`listings`** — `id`, `identity_key` (unique, normalized domain+path or @handle),
   `display_url`, `category_id` (FK), `status` (`draft` | `pending_payment` |
   `paid_pending_review` | `approved` | `rejected`), `amount` (integer, VNĐ, starts at 0),

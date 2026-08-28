@@ -1,5 +1,8 @@
--- 21 launch categories + default settings. Source of truth:
--- docs/sprints/sprint-01-foundation.md S1-T5. Idempotent (upsert on conflict).
+-- 30 categories + default settings. Source of truth:
+-- docs/sprints/sprint-01-foundation.md S1-T5 (original 21) + the 2026-08-28
+-- addition (9 more, matched against outbid.lol's category list — see
+-- PROGRESS.md Decisions for 'web3-investing', the one deliberate rename).
+-- Idempotent (upsert on conflict).
 insert into categories (slug, name_vi, sort_order) values
   ('seo-ai-visibility', 'SEO & Hiển thị AI', 0),
   ('ai-agents-infra', 'AI Agents & Hạ tầng AI', 1),
@@ -21,7 +24,16 @@ insert into categories (slug, name_vi, sort_order) values
   ('real-estate', 'Bất động sản', 17),
   ('study-abroad', 'Du học & Tư vấn du học', 18),
   ('food-restaurants', 'Ẩm thực & Quán/Nhà hàng', 19),
-  ('other', 'Khác', 20)
+  ('people-profiles', 'Cá nhân & Hồ sơ', 20),
+  ('games-entertainment', 'Trò chơi & Giải trí', 21),
+  ('ecommerce-retail', 'Thương mại điện tử & Bán lẻ', 22),
+  ('audio-voice-podcasting', 'Âm thanh, Giọng nói & Podcast', 23),
+  ('security-privacy-compliance', 'Bảo mật, Riêng tư & Tuân thủ', 24),
+  ('domains-web-assets', 'Tên miền & Tài sản Web', 25),
+  ('leaderboards-attention', 'Bảng xếp hạng & Thị trường sự chú ý', 26),
+  ('travel-local-lifestyle', 'Du lịch, Địa phương & Phong cách sống', 27),
+  ('web3-investing', 'Web3 & Đầu tư', 28),
+  ('other', 'Khác', 29)
 on conflict (slug) do update set name_vi = excluded.name_vi, sort_order = excluded.sort_order;
 
 insert into settings (key, value) values

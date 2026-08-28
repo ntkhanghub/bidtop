@@ -191,10 +191,13 @@ move a listing up, without re-entering its whole content.
 ## MVP cut line
 
 BidTop.vn v1 ships **guest checkout only** — no user accounts, no login, no password anywhere on
-the public side. It ships with **21 categories** (see `docs/sprints/sprint-01-foundation.md`
-S1-T5 for the authoritative list) covering Nhóm 1 (SaaS/startup, agencies, real
-estate as a single category) and does **not** include "Dịch vụ pháp lý" or "Crypto, Web3 &
-Investing" as categories pending legal review. Content moderation is **manual admin review**, not
+the public side. It ships with **30 categories** — the original 21 (see
+`docs/sprints/sprint-01-foundation.md` S1-T5 for that authoritative list) plus 9 more added
+2026-08-28 to match outbid.lol's category list (`supabase/seed.sql` is the actual applied source
+for the current full set) — covering Nhóm 1 (SaaS/startup, agencies, real estate as a single
+category) and does **not** include "Dịch vụ pháp lý" as a category pending legal review; the
+matching "Crypto, Web3 & Investing" restriction was lifted in the same 2026-08-28 change (see
+PROGRESS.md Decisions), added as "Web3 & Đầu tư". Content moderation is **manual admin review**, not
 automated NSFW detection — the heuristic checks (banned link patterns, shortlink resolution) run
 automatically, but human judgment gates every first-time listing. There is no automated refund
 flow, no third-party analytics vendor, and no integration whatsoever with totnhat.com.vn (F16,
