@@ -1,4 +1,5 @@
 import { getClickCounts } from "@/lib/get-click-counts";
+import { SITE_NAME } from "@/lib/site";
 import { supabase } from "@/lib/supabase/server";
 import { CategoryFilter } from "./_components/category-filter";
 import { HeroSubmitForm } from "./_components/hero-submit-form";
@@ -108,7 +109,7 @@ export default async function Home({
 
   return (
     <main className="mx-auto max-w-[900px] px-4 py-12">
-      <h1 className="text-2xl font-bold text-foreground">BidTop.vn</h1>
+      <h1 className="text-2xl font-bold text-foreground">{SITE_NAME}</h1>
       <p className="mt-1 text-muted-foreground">Rank là số tiền đã trả — không gì khác.</p>
       {page === 1 && (
         <HeroSubmitForm

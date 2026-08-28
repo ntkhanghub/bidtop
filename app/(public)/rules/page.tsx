@@ -1,3 +1,4 @@
+import { SITE_NAME } from "@/lib/site";
 import { supabase } from "@/lib/supabase/server";
 
 export const revalidate = 30;
@@ -14,7 +15,7 @@ export default async function RulesPage() {
       <h1 className="text-2xl font-bold text-foreground">Luật chơi</h1>
       <div className="mt-4 flex flex-col gap-4 text-foreground/80">
         <p>
-          Thứ hạng trên BidTop.vn là số tiền đã trả — không có yếu tố nào khác. Ai trả nhiều hơn sẽ
+          Thứ hạng trên {SITE_NAME} là số tiền đã trả — không có yếu tố nào khác. Ai trả nhiều hơn sẽ
           đứng cao hơn, bất kỳ lúc nào.
         </p>
         <p>

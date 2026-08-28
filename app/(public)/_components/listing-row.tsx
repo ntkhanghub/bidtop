@@ -33,11 +33,19 @@ export function ListingRow({
   const isTopRank = rank === 1;
   const bareUrl = listing.display_url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
+  // Border/tint fades out from rank #1 (boldest) to #3 (faintest); ranks
+  // below #3 get no special treatment.
+  const topBorderStyles: Record<number, string> = {
+    1: "border-accent bg-accent/10",
+    2: "border-accent/50 bg-accent/5",
+    3: "border-accent/25 bg-accent/[0.02]",
+  };
+
   return (
     <li
       className={cn(
         "group flex items-start justify-between gap-3 py-4",
-        isTopRank && "rounded-xl border border-accent bg-accent/10 px-3"
+        topBorderStyles[rank] && cn("rounded-xl border px-3", topBorderStyles[rank])
       )}
     >
       <div className="flex min-w-0 items-start gap-3">

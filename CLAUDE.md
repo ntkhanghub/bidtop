@@ -205,7 +205,10 @@ PROGRESS.md
   `lib/auth/session.ts`; `RESEND_API_KEY`, `ADMIN_NOTIFICATION_EMAIL`, `RESEND_FROM_EMAIL` —
   admin email notifications, see `lib/email/notify.ts`, all three silently no-op if unset);
   `CATEGORY_TOP_LISTINGS_COUNT` — not a secret, just a tunable: how many top listings each
-  `/categories` card previews, defaults to 1 if unset, see `app/(public)/categories/page.tsx`; keep
+  `/categories` card previews, defaults to 1 if unset, see `app/(public)/categories/page.tsx`;
+  `SITE_NAME` — not a secret, the single source for the site name shown across the app (page
+  title, nav, static-page copy, SePay checkout description, admin notification email subjects),
+  defaults to "BidTop.vn" if unset, see `lib/site.ts`; keep
   `.env.example` current and `.env` gitignored. If a secret ever lands in a commit, stop and tell
   the user — rotating it is their call.
 - Ask before anything destructive or hard to reverse: dropping/altering DB tables with data,

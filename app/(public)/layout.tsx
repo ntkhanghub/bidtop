@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SITE_NAME } from "@/lib/site";
 import { OnlineCounter } from "./_components/online-counter";
 
 const NAV_LINKS = [
@@ -16,7 +17,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-[900px] items-center justify-between px-4 py-4">
           <Link href="/" className="text-lg font-bold text-primary">
-            BidTop.vn
+            {SITE_NAME}
           </Link>
           <nav className="flex items-center gap-1">
             {NAV_LINKS.map((link) => (

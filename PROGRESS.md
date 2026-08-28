@@ -36,6 +36,31 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-28 · Consolidated the hardcoded "BidTop.vn" site name into one `SITE_NAME` env-backed
+  constant (not a sprint task — user request, after I pointed out it was hardcoded in 7 places
+  with no single source) · **New:** `lib/site.ts` — `export const SITE_NAME =
+  process.env.SITE_NAME ?? "BidTop.vn"`. **Changed (7 call sites):** `app/layout.tsx` (page
+  `<title>` metadata), `app/(public)/layout.tsx` (nav logo), `app/(public)/page.tsx` (homepage
+  `<h1>`), `app/(public)/about/page.tsx`, `app/(public)/rules/page.tsx` (static-page copy),
+  `app/api/payments/sepay/create-order/route.ts` (checkout `order_description`),
+  `lib/email/notify.ts` (both admin-notification email subjects). `lib/payment/sepay.test.ts`
+  left untouched — it passes a literal fixture description directly to `createSepayCheckout`,
+  unrelated to this constant. Documented in `.env.example`, set explicitly to `SITE_NAME=BidTop.vn`
+  in the real `.env` (user asked for the value to live in `.env`, not just a code fallback), and
+  added to CLAUDE.md's Safety-rules env-var list. **Verified live**, including that the env var
+  genuinely drives it (not just read in code): temporarily set `SITE_NAME=BidTopTEST.vn`, restarted
+  the dev server (env vars aren't hot-reloaded), and confirmed the browser tab title, homepage nav,
+  homepage `<h1>`, and `/about`'s body copy all switched to "BidTopTEST.vn" — then reverted to
+  `BidTop.vn` and rebuilt. Lint/typecheck/`npm test` (27/27)/`npm run build` all pass. Not yet
+  committed.
+- 2026-08-28 · Faded border/tint on homepage ranks #2 and #3, matching an outbid.lol screenshot
+  (not a sprint task — user request) · `listing-row.tsx`'s special-card treatment (previously
+  rank #1 only) now covers #1–#3 via a `topBorderStyles` map — `border-accent bg-accent/10` (#1,
+  unchanged) → `border-accent/50 bg-accent/5` (#2) → `border-accent/25 bg-accent/[0.02]` (#3). The
+  Crown badge stays rank-#1-only (not asked to change — the request was specifically about the
+  border). Verified live/screenshotted against the 3 real approved listings (exactly ranks 1–3,
+  no seeding needed this time): visibly decreasing border/background intensity down the three
+  rows. Lint/typecheck pass. Not yet committed.
 - 2026-08-28 · Added 9 categories, matching a full diff against outbid.lol's category list (not a
   sprint task — user request) · Compared the 21 existing categories against outbid.lol's 28 and
   found 9 gaps: 8 with no issue (People & Profiles, Games & Entertainment, Ecommerce & Retail,

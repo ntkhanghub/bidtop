@@ -1,3 +1,5 @@
+import { SITE_NAME } from "@/lib/site";
+
 // Best-effort admin notifications via Resend's HTTP API (plain fetch, not the
 // resend SDK — CLAUDE.md: no new dependency for something under ~20 lines).
 // Callers MUST wrap these in try/catch — an email failure must never block a
@@ -21,7 +23,7 @@ async function sendNotification(subject: string, html: string): Promise<void> {
 // longer required at checkout.
 export function notifyNewSubmission(listing: { displayUrl: string; submitterEmail: string | null }) {
   return sendNotification(
-    "BidTop.vn — Listing mới chờ thanh toán",
+    `${SITE_NAME} — Listing mới chờ thanh toán`,
     `<p>Listing mới vừa được tạo, đang chờ thanh toán.</p><p><strong>${listing.displayUrl}</strong></p><p>Người đăng: ${listing.submitterEmail ?? "(không có email)"}</p>`,
   );
 }
@@ -29,7 +31,7 @@ export function notifyNewSubmission(listing: { displayUrl: string; submitterEmai
 // A listing just reached paid_pending_review — the "go check the queue" moment.
 export function notifyReadyForReview(listing: { displayUrl: string; submitterEmail: string | null }) {
   return sendNotification(
-    "BidTop.vn — Listing sẵn sàng để duyệt",
+    `${SITE_NAME} — Listing sẵn sàng để duyệt`,
     `<p>Listing đã thanh toán xong, cần admin duyệt.</p><p><strong>${listing.displayUrl}</strong></p><p>Người đăng: ${listing.submitterEmail ?? "(không có email)"}</p>`,
   );
 }

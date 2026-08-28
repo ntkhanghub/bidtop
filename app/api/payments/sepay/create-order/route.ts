@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSepayCheckout } from "@/lib/payment/sepay";
+import { SITE_NAME } from "@/lib/site";
 import { supabase } from "@/lib/supabase/server";
 
 const bodySchema = z.object({ bidId: z.string().uuid() });
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
     apptransid: bid.gateway_order_id,
     appuser: bid.id,
     amount: bid.total_charged,
-    description: "BidTop.vn - nâng hạng",
+    description: `${SITE_NAME} - nâng hạng`,
     successUrl: new URL("/submit/return?outcome=success", request.url).toString(),
     errorUrl: new URL("/submit/return?outcome=error", request.url).toString(),
     cancelUrl: new URL("/submit/return?outcome=cancel", request.url).toString(),
