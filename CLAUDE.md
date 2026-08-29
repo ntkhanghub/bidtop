@@ -112,11 +112,18 @@ app/
     rules/, about/            # S5 — static pages (F3); about/ has a real-copy TODO placeholder
     _components/               # listing-row, leaderboard, activity-feed, online-counter (client)
   admin/(protected)/          # S4 — login-gated: pending queue (/admin), listings management
-                               # (/admin/listings — search/filter/edit-category/unpublish),
-                               # settings (super_admin)
+                               # (/admin/listings — search/filter/unpublish/republish;
+                               # listings/[id] — full metadata edit form + status actions
+                               # (approve/reject/unpublish/republish via the same guarded
+                               # endpoints) + per-listing bid history + click stats (total + per-
+                               # day), added 2026-08-29), bids (/admin/bids — global bid history,
+                               # newest first, added 2026-08-29), settings (super_admin)
   admin/login/                # S4 — public login page
-  api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject,category,
-                               # unpublish,republish}, settings
+  api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject,unpublish,
+                               # republish} (guarded single-purpose status transitions) +
+                               # listings/[id] (POST — general metadata edit: title/logo/
+                               # description/URL/category; supersedes the old category-only route,
+                               # deleted 2026-08-28), settings
   api/payments/sepay/create-order/  # starts a SePay checkout, returns {checkoutUrl, fields}
                                # (a form-POST target, not a redirect URL)
   api/presence/heartbeat/     # S5 — "N online" heartbeat (F12), self-built, no third-party vendor

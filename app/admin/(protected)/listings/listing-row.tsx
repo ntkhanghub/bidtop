@@ -7,7 +7,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { formatVnDateTime } from "@/lib/format-vn-datetime";
 import type { ListingStatus } from "@/lib/supabase/database.types";
+import { STATUS_BADGE } from "../listing-status";
 
 type Listing = {
   id: string;
@@ -24,15 +26,6 @@ type Listing = {
   unpublished_at: string | null;
 };
 type Category = { id: string; slug: string; name_vi: string };
-
-const STATUS_BADGE: Record<ListingStatus, { label: string; className: string }> = {
-  approved: { label: "Đã duyệt", className: "bg-live/15 text-live" },
-  rejected: { label: "Đã từ chối", className: "bg-destructive/15 text-destructive" },
-  unpublished: { label: "Đã gỡ", className: "bg-muted text-muted-foreground" },
-  paid_pending_review: { label: "Chờ duyệt", className: "bg-accent/20 text-accent-foreground" },
-  draft: { label: "Nháp", className: "bg-muted text-muted-foreground" },
-  pending_payment: { label: "Chờ thanh toán", className: "bg-muted text-muted-foreground" },
-};
 
 export function ListingRow({ listing, categories }: { listing: Listing; categories: Category[] }) {
   const router = useRouter();
@@ -118,7 +111,7 @@ export function ListingRow({ listing, categories }: { listing: Listing; categori
       )}
       {listing.status === "unpublished" && listing.unpublished_at && (
         <p className="mt-2 text-sm text-muted-foreground">
-          Đã gỡ lúc {new Date(listing.unpublished_at).toLocaleString("vi-VN")}
+          Đã gỡ lúc {formatVnDateTime(listing.unpublished_at)}
         </p>
       )}
 

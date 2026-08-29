@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardCheck, List, Settings } from "lucide-react";
+import { ClipboardCheck, History, List, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ export function SidebarNav({ showSettings }: { showSettings: boolean }) {
   const items = [
     { href: "/admin", label: "Hàng chờ duyệt", icon: <ClipboardCheck className="size-[18px]" /> },
     { href: "/admin/listings", label: "Quản lý link", icon: <List className="size-[18px]" /> },
+    { href: "/admin/bids", label: "Lịch sử bid", icon: <History className="size-[18px]" /> },
     ...(showSettings
       ? [
           {
