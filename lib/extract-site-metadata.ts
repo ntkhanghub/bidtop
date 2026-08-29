@@ -42,10 +42,13 @@ export async function extractSiteMetadata(pageUrl: string): Promise<SiteMetadata
 
     const html = await res.text();
     const $ = cheerio.load(html);
-    const origin = new URL(res.url || pageUrl).origin;
+    const resolvedUrl = new URL(res.url || pageUrl);
+    const origin = resolvedUrl.origin;
+    const hostname = resolvedUrl.hostname.replace(/^www\./, "");
 
-    const title =
+    const rawTitle =
       $('meta[property="og:title"]').attr("content")?.trim() || $("title").first().text().trim() || null;
+    const title = rawTitle ? `${hostname} - ${rawTitle}` : null;
 
     const description =
       $('meta[name="description"]').attr("content")?.trim() ||

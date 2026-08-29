@@ -123,7 +123,7 @@ export default async function ListingDetailPage({
         {timeAgoVi(firstConfirmedAt)}
       </p>
 
-      <div className="mt-6 grid grid-cols-3 gap-3">
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card className="gap-1 p-4">
           <CardDescription>Đã trả</CardDescription>
           <CardTitle className="font-mono text-xl tabular-nums">

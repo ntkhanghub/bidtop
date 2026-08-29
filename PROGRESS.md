@@ -36,6 +36,126 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-29 · Mobile responsive fixes for the public UI, styled after outbid.lol's real mobile
+  markup (not a sprint task — user request: "giao diện mobile phone chưa ổn, bị tràn lề") ·
+  **Researched first, not guessed:** loaded the real outbid.lol at a 375px viewport and read its
+  actual DOM/computed classes (not assumed) before proposing anything — found they do NOT use a
+  hamburger/slide menu on mobile; instead they hide only the truly-redundant nav item
+  (`hidden lg:list-item` on their "Leaderboard" link, since the logo already goes home) and shrink
+  everything else (`text-xs sm:text-sm` nav text, icon-only `size-7` buttons for search/theme,
+  `text-[11px] md:text-xs` on listing-row meta text) while keeping **all** info visible at every
+  breakpoint — confirmed via a real row's outerHTML that outbid never hides category/domain/clicks
+  on mobile, only shrinks font size, and that its rank+avatar block switches from horizontal to a
+  `flex-col` vertical stack under a fixed-width column on mobile. Also confirmed the "claim this
+  rank" hover-reveal button has no mobile-specific override on outbid either (same
+  `group-hover`/`group-focus-within`-only opacity-0 pattern) — so BidTop's identical existing
+  behavior needed no change. **Changed:** `app/(public)/layout.tsx` — nav's "Trang chủ" link (the
+  one redundant with the logo) gets `hidden sm:inline-flex`; remaining 3 links + "Đăng listing" +
+  `ThemeToggle` shrink to `text-[11px] px-1.5` on mobile (`sm:text-sm sm:px-3` restores desktop);
+  "Đăng listing" label shortens to "Đăng" below `sm` via two conditionally-hidden spans (BidTop,
+  unlike outbid, has no on-page hero form on every route, so this CTA — outbid has no equivalent —
+  stays, just shorter); header row gained `flex-wrap` as a safety net so if the shrunk content still
+  doesn't fit a given phone width, nav wraps to its own line under the logo instead of overflowing
+  (verified this is not just theoretical: at exactly 375px width the trimmed nav is ~9px too wide
+  and genuinely wraps to 2 lines; from ~414px width up it's back to one line — both states
+  confirmed via `getBoundingClientRect`, zero horizontal overflow at either). `app/(public)/
+  _components/listing-row.tsx` — rank number + avatar now sit in a `flex w-9 flex-col items-center
+  sm:w-auto sm:flex-row` wrapper (vertical stack on mobile, horizontal from `sm` up, matching
+  outbid's real markup), avatar shrinks `size-6` → `sm:size-8` (deliberately not using the `Avatar`
+  component's own `size` prop for this, since its `data-[size=X]` selector and a responsive
+  `sm:` utility class are different Tailwind modifier groups that `tailwind-merge` won't reliably
+  dedupe against each other — used a plain default-size avatar with a direct `size-6 sm:size-8`
+  className override instead, which only involves unprefixed-vs-`sm:` classes, an unambiguous
+  merge), meta line (category · time · domain · clicks · "xem chi tiết") shrinks to
+  `text-[11px] sm:text-xs` — **nothing hidden**, matching the outbid research above (an earlier
+  proposal in this same session to hide domain/clicks on mobile was wrong and retracted before
+  implementing, once the real outbid markup showed otherwise). `app/(public)/listing/[id]/
+  page.tsx` — the 3 stat cards (`Đã trả`/`Hạng trong danh mục`/`Hạng tổng`) were a hardcoded
+  `grid-cols-3` with no mobile fallback (a real bug, unrelated to the outbid comparison since
+  outbid has no equivalent page); changed to `grid-cols-1 sm:grid-cols-3`. **Verified live**,
+  not just class-level reasoning: this session's own `next dev` couldn't run (Next.js refuses a
+  second instance against the same project folder — a known limitation, see the 2026-08-28 Link
+  Detail Page entry below), so reused a concurrent session's already-running server at
+  `localhost:3000` (read-only navigation, same established pattern as prior sessions). Production
+  had 0 approved listings at the time (see the data-wipe entry directly below — unrelated,
+  concurrent work), so temporarily seeded one synthetic listing
+  (`mobile-ui-test.example.com`, via a throwaway script deleted immediately after) to render a real
+  `listing-row.tsx` row, confirmed via `getBoundingClientRect`/`getComputedStyle` at a real 375px
+  viewport: 0 horizontal overflow anywhere on the page, avatar renders at exactly 24px (not 32),
+  meta line at exactly 11px font, title truncates correctly without pushing the price off-screen,
+  the 3 stat cards stack to full-width single-column — then deleted the synthetic listing. Lint/
+  typecheck/`npm test` (27/27) all pass. Not yet committed.
+- 2026-08-29 · Wiped all listing/transaction data in production for a clean re-import (user's
+  explicit request + confirmed scope) · Ran `TRUNCATE bids, listing_clicks, listings RESTART
+  IDENTITY CASCADE` directly against `DIRECT_URL` (not a `supabase/migrations/` file — this is a
+  one-time data wipe, not a schema change, so it doesn't belong in the additive-only migration
+  history). `categories`, `settings`, `admin_users` untouched. Confirmed via row counts before
+  (14 listings / 26 bids / 18 listing_clicks) and after (0/0/0). User is importing fresh listing
+  data next.
+- 2026-08-29 · Bold both money values in the "Đã có listing (...) — nâng bid tối thiểu (...)"
+  top-up message, red for the minimum-required figure (not a sprint task — user request) ·
+  `submit-form.tsx` and `hero-submit-form.tsx` both render this exact message from the same
+  `lookup` shape (`{currentAmount, minimumRequired, isNew}` from `/api/listings/lookup`) — updated
+  both for consistency. The "not new" ternary branch changed from a plain template-literal string
+  to a real JSX fragment: `currentAmount` wrapped in `<b>`, `minimumRequired` wrapped in
+  `<b className="text-destructive">`. Deliberately used real JSX children (not string
+  interpolation) — the same file already hit the opposite bug once before (2026-08-29 entry
+  further down: `<b>` inside a template literal renders as literal `<b>` text, not bold), so this
+  mirrors the already-fixed pattern instead of reintroducing it. The "Listing mới" (brand-new)
+  branch was left untouched — not part of what was asked. **Verification note:** this session's
+  Browser pane isn't visually composited (confirmed via a failed screenshot attempt, matching the
+  same limitation noted in the 2026-08-27 hover-state entry below), so neither simulated clicks nor
+  programmatic `.focus()`/blur reliably trigger `handleIdentityBlur`'s async lookup in this
+  environment — tried both the existing tab and a fresh background tab, same result. Verified
+  instead by: typecheck/lint/`npm test` (27/27) all clean; calling the real
+  `/api/listings/lookup` endpoint directly for `contentsuper.com` and confirming the response shape
+  (`{currentAmount: 100000, minimumRequired: 125000, isNew: false}`) matches exactly what the new
+  JSX destructures and formats; and structural comparison against the immediately-adjacent
+  `<b>`-in-JSX-fragment block in `hero-submit-form.tsx` ("Vị trí mới bắt đầu từ..."), which used this
+  identical technique and was live-verified in an earlier session. Not independently confirmed via
+  live DOM rendering — flagging that gap rather than claiming a screenshot-backed check that didn't
+  happen. Not yet committed.
+- 2026-08-29 · `/submit` form: red-asterisk markers on the 3 required fields (URL, Số tiền, Danh
+  mục) + client-side required checks for URL/Số tiền before submit (not a sprint task — user
+  request) · `submit-form.tsx`'s three `<Label>`s for identity/amount/category each gained a
+  trailing `<span className="text-destructive">*</span>` — category didn't strictly need a
+  runtime check (the `<Select>` always holds a real value, defaulted from `categories[0]`/`other`,
+  never emptyable), so it only got the visual marker. `use-submit-form.ts`'s `handleSubmit` now
+  checks `!identity.trim()` and `!amount.trim() || Number.isNaN(amountNumber)` before the existing
+  minimum-amount check, surfacing "Vui lòng nhập URL hoặc @handle."/"Vui lòng nhập số tiền." through
+  the same `lookupError`/`amountError` slots already rendered under those fields — no new UI
+  states added. This hook is shared with `hero-submit-form.tsx`, so the homepage's inline claim
+  form gets the same guards for free (it has no labels to put asterisks on, so no UI change there).
+  **Verified live** against the real running dev server (reused a concurrent session's instance):
+  hit a real tooling snag first — the Browser pane's simulated mouse click wasn't registering on
+  the submit button at all (confirmed via a temporary debug `console.log` in `handleSubmit`: zero
+  log lines after a simulated click, but a JS-dispatched `.click()` on the same button fired it
+  immediately) — a pane-not-visually-composited limitation matching the earlier hover-state gap
+  noted in the 2026-08-27 entry below, not a code bug. Verified instead via direct DOM
+  `.click()`/React-controlled-value dispatch: empty identity shows "Vui lòng nhập URL hoặc
+  @handle.", empty amount shows "Vui lòng nhập số tiền.", both inline and with zero network calls
+  fired in either case; asterisks confirmed present on all three labels via DOM read. Debug log
+  removed before finishing. Lint/typecheck/`npm test` (27/27) all pass. Not yet committed.
+- 2026-08-29 · `/submit` form: default amount to `starting_price`, +/- stepper by
+  `min_increment`, fixed URL placeholder (not a sprint task — user request; a 4th ask —
+  scraping title/logo/description on submit — was already fully built, see the 2026-08-27/28
+  entries below, so nothing changed there) · `app/(public)/submit/page.tsx` now fetches
+  `starting_price`/`min_increment` from `settings` (same query shape already used by
+  `app/(public)/page.tsx` for `HeroSubmitForm`) and passes them into `SubmitForm`.
+  `use-submit-form.ts`'s `amount` state now defaults to `startingPrice` when no `?amount=` is
+  present (was `""`); its submit-time minimum check no longer skips when `lookup` hasn't
+  resolved yet — it now falls back to `startingPrice` as the floor so a below-minimum amount is
+  always caught client-side, not just after an identity-field blur. `submit-form.tsx` gained the
+  same `Minus`/`Plus` stepper buttons around the amount `Input` that `hero-submit-form.tsx`
+  already uses (`step(minIncrement)`, floor at 0, manual typing still works), and the identity
+  field's placeholder now matches `hero-submit-form.tsx`'s verbatim: "URL công ty/sản phẩm hoặc
+  profile FB/X/Linkedin... của bạn" (was "stripe.com hoặc @yourhandle"). **Verified live** against
+  the real running dev server (reused a concurrent session's instance, read-only navigation) and
+  the real Supabase settings row: amount field loads at 100.000đ, `+` steps to 125.000đ (confirms
+  real `min_increment=25000`, not a hardcoded fallback), `-` x3 back down to 50.000đ, submitting
+  at 50.000đ blocks inline with "Số tiền tối thiểu là 100.000đ." (no network call fired — caught
+  by the new pre-lookup client check), placeholder text confirmed via the DOM. Lint/typecheck/
+  `npm test` (27/27) all pass. Not yet committed.
 - 2026-08-29 · Listing links now point straight at the real destination (real dofollow backlink)
   instead of through the `/out/[id]` redirect, click tracking moved to a client-side POST, and the
   leaderboard row adopts outbid.lol's full-card-overlay-link card structure (not a sprint task —

@@ -21,15 +21,17 @@ type LookupResult = {
 export function useSubmitForm({
   categories,
   initialAmount,
+  startingPrice = 0,
 }: {
   categories: Category[];
   initialAmount?: number;
+  startingPrice?: number;
 }) {
   const router = useRouter();
   const [identity, setIdentity] = useState("");
   const [lookup, setLookup] = useState<LookupResult | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
-  const [amount, setAmount] = useState(initialAmount ? String(initialAmount) : "");
+  const [amount, setAmount] = useState(String(initialAmount ?? startingPrice));
   const [categorySlug, setCategorySlug] = useState(categories[0]?.slug ?? "other");
   const [categoryTouched, setCategoryTouched] = useState(false);
   const [email, setEmail] = useState("");
@@ -77,10 +79,21 @@ export function useSubmitForm({
     event.preventDefault();
     setSubmitError(null);
 
+    if (!identity.trim()) {
+      setLookupError("Vui lòng nhập URL hoặc @handle.");
+      return;
+    }
+
     const amountNumber = Number(amount);
+    if (!amount.trim() || Number.isNaN(amountNumber)) {
+      setAmountError("Vui lòng nhập số tiền.");
+      return;
+    }
+
     const isTestBypass = email.trim().toLowerCase() === TEST_BYPASS_EMAIL;
-    if (!isTestBypass && lookup && amountNumber < lookup.minimumRequired) {
-      setAmountError(`Số tiền tối thiểu là ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`);
+    const minimumRequired = lookup ? lookup.minimumRequired : startingPrice;
+    if (!isTestBypass && amountNumber < minimumRequired) {
+      setAmountError(`Số tiền tối thiểu là ${minimumRequired.toLocaleString("vi-VN")}đ.`);
       return;
     }
     setAmountError(null);

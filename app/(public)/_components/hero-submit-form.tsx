@@ -83,7 +83,10 @@ export function HeroSubmitForm({
           lookup.isNew ? (
             `Listing mới — tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`
           ) : (
-            `Đã có listing (${lookup.currentAmount.toLocaleString("vi-VN")}đ) — nâng bid tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`
+            <>
+              Đã có listing (<b>{lookup.currentAmount.toLocaleString("vi-VN")}đ</b>) — nâng bid
+              tối thiểu <b className="text-destructive">{lookup.minimumRequired.toLocaleString("vi-VN")}đ</b>.
+            </>
           )
         ) : (
           <>

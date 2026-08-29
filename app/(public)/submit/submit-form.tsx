@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, Minus, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,9 +19,13 @@ type Category = { slug: string; name_vi: string };
 export function SubmitForm({
   categories,
   initialAmount,
+  startingPrice,
+  minIncrement,
 }: {
   categories: Category[];
   initialAmount?: number;
+  startingPrice: number;
+  minIncrement: number;
 }) {
   const {
     identity,
@@ -40,45 +44,79 @@ export function SubmitForm({
     submitting,
     handleIdentityBlur,
     handleSubmit,
-  } = useSubmitForm({ categories, initialAmount });
+  } = useSubmitForm({ categories, initialAmount, startingPrice });
+
+  function step(delta: number) {
+    const next = Math.max(0, (Number(amount) || 0) + delta);
+    setAmount(String(next));
+  }
 
   return (
     <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
       <div>
-        <Label htmlFor="identity">URL sản phẩm hoặc @handle</Label>
+        <Label htmlFor="identity">
+          URL sản phẩm hoặc @handle <span className="text-destructive">*</span>
+        </Label>
         <Input
           id="identity"
           type="text"
           value={identity}
           onChange={(e) => setIdentity(e.target.value)}
           onBlur={handleIdentityBlur}
-          placeholder="stripe.com hoặc @yourhandle"
+          placeholder="URL công ty/sản phẩm hoặc profile FB/X/Linkedin... của bạn"
           className="mt-1"
         />
         {lookupError && <p className="mt-1 text-sm text-destructive">{lookupError}</p>}
         {lookup && (
           <p className="mt-1 text-sm text-muted-foreground">
-            {lookup.isNew
-              ? `Listing mới — tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`
-              : `Đã có listing (${lookup.currentAmount.toLocaleString("vi-VN")}đ) — nâng bid tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`}
+            {lookup.isNew ? (
+              `Listing mới — tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`
+            ) : (
+              <>
+                Đã có listing (<b>{lookup.currentAmount.toLocaleString("vi-VN")}đ</b>) — nâng bid
+                tối thiểu <b className="text-destructive">{lookup.minimumRequired.toLocaleString("vi-VN")}đ</b>.
+              </>
+            )}
           </p>
         )}
       </div>
 
       <div>
-        <Label htmlFor="amount">Số tiền (VNĐ)</Label>
-        <Input
-          id="amount"
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="mt-1 font-mono"
-        />
+        <Label htmlFor="amount">
+          Số tiền (VNĐ) <span className="text-destructive">*</span>
+        </Label>
+        <div className="mt-1 flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Giảm số tiền"
+            onClick={() => step(-minIncrement)}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted"
+          >
+            <Minus className="size-4" />
+          </button>
+          <Input
+            id="amount"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="font-mono"
+          />
+          <button
+            type="button"
+            aria-label="Tăng số tiền"
+            onClick={() => step(minIncrement)}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted"
+          >
+            <Plus className="size-4" />
+          </button>
+        </div>
         {amountError && <p className="mt-1 text-sm text-destructive">{amountError}</p>}
       </div>
 
       <div>
-        <Label htmlFor="category">Danh mục</Label>
+        <Label htmlFor="category">
+          Danh mục <span className="text-destructive">*</span>
+        </Label>
         <Select
           value={categorySlug}
           onValueChange={(value) => {

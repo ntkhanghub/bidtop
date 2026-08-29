@@ -31,7 +31,7 @@ describe("extractSiteMetadata", () => {
     );
     const result = await extractSiteMetadata("https://example.com");
     expect(result).toEqual({
-      title: "Example — the best product",
+      title: "example.com - Example — the best product",
       logoUrl: "https://example.com/favicon-32.png",
       description: "Best product ever",
     });
@@ -53,7 +53,7 @@ describe("extractSiteMetadata", () => {
     );
     const result = await extractSiteMetadata("https://example.com");
     expect(result).toEqual({
-      title: "OG title",
+      title: "example.com - OG title",
       logoUrl: "https://cdn.example.com/touch-icon.png",
       description: "OG description",
     });

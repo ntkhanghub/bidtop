@@ -65,18 +65,20 @@ export function ListingRow({
         className="absolute inset-0 z-0 rounded-[inherit]"
       />
 
-      <div className="relative z-10 flex min-w-0 flex-1 items-start gap-3 pointer-events-none">
-        {isTopRank ? (
-          <Badge className="mt-0.5 bg-accent text-accent-foreground">
-            <Crown className="size-3" />#{rank}
-          </Badge>
-        ) : (
-          <span className="mt-1 w-8 text-right text-sm text-muted-foreground">#{rank}</span>
-        )}
-        <Avatar className="mt-0.5">
-          {listing.logo_url && <AvatarImage src={listing.logo_url} alt="" />}
-          <AvatarFallback>{(listing.title ?? bareUrl).charAt(0).toUpperCase()}</AvatarFallback>
-        </Avatar>
+      <div className="relative z-10 flex min-w-0 flex-1 items-start gap-2 pointer-events-none sm:gap-3">
+        <div className="flex w-9 shrink-0 flex-col items-center gap-1 sm:w-auto sm:flex-row sm:gap-3">
+          {isTopRank ? (
+            <Badge className="bg-accent text-accent-foreground">
+              <Crown className="size-3" />#{rank}
+            </Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground sm:text-sm">#{rank}</span>
+          )}
+          <Avatar className="size-6 sm:size-8">
+            {listing.logo_url && <AvatarImage src={listing.logo_url} alt="" />}
+            <AvatarFallback>{(listing.title ?? bareUrl).charAt(0).toUpperCase()}</AvatarFallback>
+          </Avatar>
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <p className="min-w-0 flex-1 truncate font-medium text-foreground">
@@ -91,7 +93,7 @@ export function ListingRow({
               {listing.description}
             </p>
           )}
-          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground sm:text-xs">
             <Link
               href={`/category/${category.slug}`}
               className="pointer-events-auto inline-flex items-center gap-1 font-medium text-foreground hover:underline"
