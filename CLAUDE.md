@@ -122,9 +122,13 @@ app/
   api/presence/heartbeat/     # S5 — "N online" heartbeat (F12), self-built, no third-party vendor
   api/webhooks/sepay/         # real IPN webhook; verifies X-Secret-Key, calls
                                # confirm_bid_and_increment()
-  out/[id]/                   # S5 — outbound click tracking (F14): records a listing_clicks row,
-                               # then redirects to display_url with UTM params. Not under /api/ —
-                               # a clicked <a href> returning a redirect, not a fetch() endpoint.
+  api/listings/[id]/click/    # F14 (redesigned 2026-08-29): records a listing_clicks row, no
+                               # redirect — listing links point straight at the real destination
+                               # (server-rendered href, a real dofollow backlink, verified against
+                               # outbid.lol's own /api/clicks call) with UTM params baked into the
+                               # href (lib/build-outbound-url.ts) instead of added by a redirect
+                               # hop. Fired client-side on click (_components/tracked-link.tsx) —
+                               # superseded the old out/[id]/ redirect route, now deleted.
 lib/
   auth/                       # S4 — password.ts (argon2id), session.ts (signed cookie),
                                # require-admin.ts (server-side role checks for pages/routes)

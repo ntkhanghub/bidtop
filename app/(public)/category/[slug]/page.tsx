@@ -62,7 +62,7 @@ export default async function CategoryPage({
         minIncrement={settings.min_increment ?? 50000}
         startingPrice={settings.starting_price ?? 100000}
         baseHref={`/category/${category.slug}`}
-        categoryMap={{ [category.id]: category.name_vi }}
+        categoryMap={{ [category.id]: { slug: category.slug, name: category.name_vi } }}
         clickCounts={clickCounts}
       />
     </main>

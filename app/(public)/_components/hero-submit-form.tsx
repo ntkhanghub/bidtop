@@ -79,11 +79,18 @@ export function HeroSubmitForm({
       </div>
 
       <p className="mt-2 text-sm text-muted-foreground">
-        {lookup
-          ? lookup.isNew
-            ? `Listing mới — tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`
-            : `Đã có listing (${lookup.currentAmount.toLocaleString("vi-VN")}đ) — nâng bid tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`
-          : `Vị trí mới bắt đầu từ ${startingPrice.toLocaleString("vi-VN")}đ. Trả giá thấp hơn giá #1 vẫn giúp bạn vào bảng ở vị trí phù hợp.`}
+        {lookup ? (
+          lookup.isNew ? (
+            `Listing mới — tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`
+          ) : (
+            `Đã có listing (${lookup.currentAmount.toLocaleString("vi-VN")}đ) — nâng bid tối thiểu ${lookup.minimumRequired.toLocaleString("vi-VN")}đ.`
+          )
+        ) : (
+          <>
+            Vị trí mới bắt đầu từ <b>{startingPrice.toLocaleString("vi-VN")}đ</b>. Trả giá thấp hơn{" "}
+            <b>giá top #1</b> vẫn giúp bạn vào bảng ở vị trí phù hợp.
+          </>
+        )}
       </p>
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -91,7 +98,7 @@ export function HeroSubmitForm({
           value={identity}
           onChange={(e) => setIdentity(e.target.value)}
           onBlur={handleIdentityBlur}
-          placeholder="URL sản phẩm hoặc @handle của bạn"
+          placeholder="URL công ty/sản phẩm hoặc profile FB/X/Linkedin... của bạn"
           className="sm:flex-[2]"
         />
         <Select

@@ -36,6 +36,83 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-29 · Listing links now point straight at the real destination (real dofollow backlink)
+  instead of through the `/out/[id]` redirect, click tracking moved to a client-side POST, and the
+  leaderboard row adopts outbid.lol's full-card-overlay-link card structure (not a sprint task —
+  user request) · **Researched first, not guessed:** navigated to the real outbid.lol, clicked a
+  listing's card, and read the actual network request it fired —
+  `POST https://outbid.lol/api/clicks` (plain `fetch`, not `sendBeacon` — safe because these links
+  use `target="_blank"`, so the current tab never unloads), response `{"clickCount":N+1}`. Confirms
+  the design implemented here is exactly what outbid does, not a guess. **User's 2 explicit calls**
+  (resolving the open questions from the analysis two messages back): keep `rel="noopener"` only —
+  no `sponsored`/`nofollow` — matching outbid exactly, full dofollow, risk accepted; and generally
+  match outbid's card structure (referenced their real HTML). **New:** `lib/build-outbound-url.ts`
+  (`buildOutboundUrl` — same 3 UTM params the old redirect used to append, now baked into the
+  static href at render time). `app/(public)/_components/tracked-link.tsx` (`"use client"`,
+  `forwardRef` so it composes with Radix `Slot`/`asChild` — fires
+  `fetch('/api/listings/[id]/click', {method:'POST'})` `.catch(()=>{})` on click, then lets the
+  real `href` navigate normally). `app/api/listings/[id]/click/route.ts` (POST-only, validates
+  uuid + listing is `approved`, inserts the `listing_clicks` row, returns the new `{clickCount}` —
+  same validation as the old route, minus the redirect). **Deleted:** `app/out/[id]/route.ts` (both
+  callers migrated first, confirmed via grep before deleting). **`listing-row.tsx` restructured**
+  to match outbid's actual markup (verified by inspecting their real HTML, not assumed): a
+  `TrackedLink` absolutely positioned `inset-0 z-0` as the first child (the real backlink,
+  `target="_blank" rel="noopener"`) with the visible content in a sibling `pointer-events-none`
+  wrapper (`relative z-10`) — inside it, only the category link and "xem chi tiết" link get
+  `pointer-events-auto` to stay independently clickable, exactly outbid's layering trick (confirmed
+  live via `getComputedStyle`: wrapper `pointer-events: none`, both inner links `auto`, overlay
+  `auto` at `z-index: 0` under the content's `z-index: 10`). Also matched: amount moved inline next
+  to the title (was a separate right-hand column); the bare domain is now plain text, not its own
+  link (the full-card overlay is the only way to reach the destination now, avoiding two competing
+  click-tracked paths); category is now a real `/category/[slug]` link with its icon (reused
+  `CATEGORY_ICONS`, moved from `app/(public)/categories/category-icons.ts` to
+  `lib/category-icons.ts` since it's now shared by 2 features); the "Giành hạng này" claim button
+  became an absolutely-positioned floating pill above the card (`top-0 -translate-y-1/2`,
+  hover/focus-reveal only — deliberately dropped the earlier `max-sm:opacity-100` always-visible-
+  on-mobile override, matching outbid's own markup, which has no mobile-specific override either).
+  `leaderboard.tsx`'s `categoryMap` shape changed from `Record<id, name>` to
+  `Record<id, {slug, name}>` (both `page.tsx` and `category/[slug]/page.tsx` updated to match).
+  `listing/[id]/page.tsx`'s "Truy cập" button switched to the same `TrackedLink` +
+  `buildOutboundUrl`. Hit the same stale-`.next`-type-cache issue as prior route deletions this
+  session — cleared `.next`, re-typechecked clean. **Verified live** against the real Supabase DB:
+  a real row's overlay link resolves to `https://contentsuper.com/?utm_source=bidtop&utm_medium=
+  referral&utm_campaign=leaderboard` with `target="_blank" rel="noopener"` (no nofollow/sponsored);
+  clicking it fired a real `POST /api/listings/.../click` returning an incremented count (7→8,
+  confirmed against the DB), then deleted that synthetic test row so it doesn't skew real
+  analytics; category link navigates correctly with icon; pointer-events layering confirmed via
+  `getComputedStyle` exactly as designed. Lint/typecheck/`npm test` (27/27)/`npm run build` all
+  pass. Not yet committed.
+- 2026-08-29 · Fixed top-3 row borders rendering as touching/merged instead of separate cards, plus
+  fixed a build-breaking syntax error found along the way (not a sprint task — user request) ·
+  **Unrelated to this session**, `app/(public)/page.tsx` and `hero-submit-form.tsx` had been edited
+  externally since last touched here (flagged by the harness's own file-change notices). The
+  homepage's `<h1>` had been "commented out" using HTML-comment syntax (`<!-- -->`), which isn't
+  valid inside JSX — this broke `next dev`/`next build` outright (parse error, every request
+  500ing). Per the harness's own guidance not to silently revert an external change, asked the
+  user directly what they wanted for that heading rather than guessing; they said to remove the
+  title from the homepage entirely, not just fix the syntax — did that (also dropped the
+  now-unused `SITE_NAME` import from that file). **The actual reported bug:** root-caused via
+  `getComputedStyle` (not guesswork) — the border *colors* on ranks #1/#2/#3 were already correct
+  (verified full/50%/25% accent opacity respectively), the real problem was `marginTop`/
+  `marginBottom: 0px` on all three rows, so adjacent rounded-corner cards sat flush against each
+  other with no gap, making the borders look fused at the seams. Added `my-2` to
+  `listing-row.tsx`'s top-3 border treatment; confirmed via `getBoundingClientRect()` that
+  consecutive rows now have an 8px gap (margins collapse as expected, no double-gap). **Also
+  flagged, not fixed (separate from what was asked):** that same external edit to
+  `hero-submit-form.tsx` added `<b>` tags inside the plain-string hint text — since it's plain JSX
+  text content (not `dangerouslySetInnerHTML`), those render as literal `<b>...</b>` characters on
+  the page rather than bold text; left alone pending the user's direction, since fixing it wasn't
+  part of this request and the right fix (real JSX bold elements vs. reverting the copy) depends on
+  intent I don't have. Lint/typecheck/`npm run build` all pass. Not yet committed.
+- 2026-08-29 · Fixed the `<b>`-tags-rendering-as-literal-text bug flagged above · User confirmed
+  intent (wanted the starting price and "giá top #1" bold) — the bug was purely mechanical: JSX
+  string interpolation doesn't parse embedded HTML, so `<b>` inside a template literal renders as
+  literal characters, not an element. Converted `hero-submit-form.tsx`'s fallback-hint branch from
+  a single template-literal string to real JSX (a fragment with actual `<b>` elements); the other
+  two lookup-based branches are unchanged plain strings, not asked to gain bold text. Verified live:
+  `document.querySelectorAll('b')` on that paragraph returns 2 real elements with computed
+  `font-weight: 700`, full text reads correctly with no stray `<b>` characters, no console errors.
+  Lint/typecheck pass. Not yet committed.
 - 2026-08-28 · Consolidated the hardcoded "BidTop.vn" site name into one `SITE_NAME` env-backed
   constant (not a sprint task — user request, after I pointed out it was hardcoded in 7 places
   with no single source) · **New:** `lib/site.ts` — `export const SITE_NAME =

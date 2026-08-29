@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/server";
 import { timeAgoVi } from "@/lib/time-ago";
-import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from "./category-icons";
+import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from "@/lib/category-icons";
 
 export const revalidate = 30;
 

@@ -58,7 +58,7 @@ export function Leaderboard({
   startingPrice: number;
   baseHref: string;
   showClaimBanner?: boolean;
-  categoryMap: Record<string, string>;
+  categoryMap: Record<string, { slug: string; name: string }>;
   clickCounts: Record<string, number>;
   activityItems?: ActivityItem[];
 }) {
@@ -101,7 +101,7 @@ export function Leaderboard({
                 listing={listing}
                 rank={rank}
                 minIncrement={minIncrement}
-                categoryName={categoryMap[listing.category_id] ?? "—"}
+                category={categoryMap[listing.category_id] ?? { slug: "other", name: "—" }}
                 clickCount={clickCounts[listing.id] ?? 0}
               />
               {rank === 3 && activityItems && activityItems.length > 0 && (

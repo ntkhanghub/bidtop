@@ -2,9 +2,11 @@ import Link from "next/link";
 import { Crown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buildOutboundUrl } from "@/lib/build-outbound-url";
+import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from "@/lib/category-icons";
 import { timeAgoVi } from "@/lib/time-ago";
 import { cn } from "@/lib/utils";
+import { TrackedLink } from "./tracked-link";
 
 type Listing = {
   id: string;
@@ -15,23 +17,25 @@ type Listing = {
   description: string | null;
   updated_at: string;
 };
+type Category = { slug: string; name: string };
 
 export function ListingRow({
   listing,
   rank,
   minIncrement,
-  categoryName,
+  category,
   clickCount,
 }: {
   listing: Listing;
   rank: number;
   minIncrement: number;
-  categoryName: string;
+  category: Category;
   clickCount: number;
 }) {
   const claimAmount = listing.amount + minIncrement;
   const isTopRank = rank === 1;
   const bareUrl = listing.display_url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const CategoryIcon = CATEGORY_ICONS[category.slug] ?? DEFAULT_CATEGORY_ICON;
 
   // Border/tint fades out from rank #1 (boldest) to #3 (faintest); ranks
   // below #3 get no special treatment.
@@ -44,11 +48,24 @@ export function ListingRow({
   return (
     <li
       className={cn(
-        "group flex items-start justify-between gap-3 py-4",
-        topBorderStyles[rank] && cn("rounded-xl border px-3", topBorderStyles[rank])
+        "group relative flex items-start gap-3 py-4",
+        topBorderStyles[rank] && cn("my-2 rounded-xl border px-3", topBorderStyles[rank])
       )}
     >
-      <div className="flex min-w-0 items-start gap-3">
+      {/* Full-card link to the real destination — a real dofollow backlink
+          (server-rendered href, not a same-origin redirect), so it must
+          stay a plain <a> pointed straight at the site. Click tracking
+          happens via TrackedLink's onClick, not a redirect hop. */}
+      <TrackedLink
+        listingId={listing.id}
+        href={buildOutboundUrl(listing.display_url)}
+        target="_blank"
+        rel="noopener"
+        aria-label={`Truy cập ${listing.title ?? listing.display_url}`}
+        className="absolute inset-0 z-0 rounded-[inherit]"
+      />
+
+      <div className="relative z-10 flex min-w-0 flex-1 items-start gap-3 pointer-events-none">
         {isTopRank ? (
           <Badge className="mt-0.5 bg-accent text-accent-foreground">
             <Crown className="size-3" />#{rank}
@@ -60,43 +77,51 @@ export function ListingRow({
           {listing.logo_url && <AvatarImage src={listing.logo_url} alt="" />}
           <AvatarFallback>{(listing.title ?? bareUrl).charAt(0).toUpperCase()}</AvatarFallback>
         </Avatar>
-        <div className="min-w-0">
-          <p className="truncate font-medium text-foreground">{listing.title ?? listing.display_url}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <p className="min-w-0 flex-1 truncate font-medium text-foreground">
+              {listing.title ?? listing.display_url}
+            </p>
+            <span className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground">
+              {listing.amount.toLocaleString("vi-VN")}đ
+            </span>
+          </div>
           {listing.description && (
-            <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">{listing.description}</p>
+            <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
+              {listing.description}
+            </p>
           )}
           <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-            <span>{categoryName}</span>
+            <Link
+              href={`/category/${category.slug}`}
+              className="pointer-events-auto inline-flex items-center gap-1 font-medium text-foreground hover:underline"
+            >
+              <CategoryIcon className="size-3" aria-hidden="true" />
+              {category.name}
+            </Link>
             <span>·</span>
             <span>{timeAgoVi(listing.updated_at)}</span>
             <span>·</span>
-            <a href={`/out/${listing.id}`} className="hover:text-foreground hover:underline">
-              {bareUrl}
-            </a>
+            <span>{bareUrl}</span>
             <span>·</span>
             <span>{clickCount.toLocaleString("vi-VN")} clicks</span>
             <span>·</span>
-            <Link href={`/listing/${listing.id}`} className="hover:text-foreground hover:underline">
+            <Link
+              href={`/listing/${listing.id}`}
+              className="pointer-events-auto hover:text-foreground hover:underline"
+            >
               xem chi tiết
             </Link>
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <span className="font-mono text-sm tabular-nums text-muted-foreground">
-          {listing.amount.toLocaleString("vi-VN")}đ
-        </span>
-        <Button
-          asChild
-          variant="outline"
-          size="sm"
-          className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100"
-        >
-          <Link href={`/submit?amount=${claimAmount}`}>
-            Giành hạng này với {claimAmount.toLocaleString("vi-VN")}đ
-          </Link>
-        </Button>
-      </div>
+
+      <Link
+        href={`/submit?amount=${claimAmount}`}
+        className="pointer-events-none absolute top-0 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent px-3 py-1 text-xs font-semibold whitespace-nowrap text-accent-foreground opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+      >
+        Giành hạng này với {claimAmount.toLocaleString("vi-VN")}đ
+      </Link>
     </li>
   );
 }

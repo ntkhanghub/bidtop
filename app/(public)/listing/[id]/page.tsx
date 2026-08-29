@@ -4,8 +4,10 @@ import { z } from "zod";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { buildOutboundUrl } from "@/lib/build-outbound-url";
 import { supabase } from "@/lib/supabase/server";
 import { timeAgoVi } from "@/lib/time-ago";
+import { TrackedLink } from "../../_components/tracked-link";
 import { CopyLinkButton } from "./_components/copy-link-button";
 
 export const revalidate = 30;
@@ -149,7 +151,14 @@ export default async function ListingDetailPage({
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <Button asChild>
-          <a href={`/out/${listing.id}`}>Truy cập {listing.display_url}</a>
+          <TrackedLink
+            listingId={listing.id}
+            href={buildOutboundUrl(listing.display_url)}
+            target="_blank"
+            rel="noopener"
+          >
+            Truy cập {listing.display_url}
+          </TrackedLink>
         </Button>
         <Button asChild variant="outline">
           <Link href={`/submit?amount=${claimAmount}`}>
