@@ -36,6 +36,249 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-08-31 · Uploaded blog cover images now read as this site's own domain instead of
+  `*.public.blob.vercel-storage.com` (not a sprint task — user request/debugging session, direct
+  follow-up to the Blob upload work above) · **Two real production bugs found and fixed along the
+  way, not guessed:** (1) the very first live upload attempt failed with "Không tải lên được ảnh." —
+  reproduced the real `put()` call directly against the user's actual token outside the route and
+  got the real underlying error, `Vercel Blob: Cannot use public access on a private store` — the
+  store had been created with private access, but cover images need `access: "public"`; user fixed
+  it by reconfiguring the store, confirmed by a real successful upload
+  (`.../blog-covers/c445c656-....jpg`). (2) User then asked to swap the domain to `bidtopvn.com` —
+  checked Vercel's own docs (`/docs/vercel-blob`, `/docs/vercel-blob/public-storage`) rather than
+  assuming, and confirmed Vercel Blob has **no custom-domain feature at all**: every blob URL is
+  permanently `https://<store-id>.public.blob.vercel-storage.com/<pathname>`. Told the user this
+  directly instead of quietly trying to configure something that doesn't exist, and laid out the
+  only real option — a reverse proxy — with its actual cost tradeoff (Vercel's own docs: direct
+  Blob CDN delivery is "3x more cost-efficient" than proxying through a Function). **User chose the
+  proxy anyway**, and confirmed `bidtopvn.com` is already this project's live custom domain (not
+  just a planned one), so the rewrite takes effect on the next deploy with no separate domain-setup
+  step needed. **New:** `next.config.ts` gained `async rewrites()`: `/media/:path*` →
+  `${BLOB_PUBLIC_BASE_URL}/:path*` (returns `[]` if that env var is unset, so a misconfigured
+  deploy fails open to "no rewrite" rather than crashing). New env var `BLOB_PUBLIC_BASE_URL` (the
+  same store's public base URL, e.g. `https://qf0ja6iophnhlub8.public.blob.vercel-storage.com`,
+  copied from any existing blob's own URL) — documented in `.env.example` and CLAUDE.md, and
+  **required in every environment that serves images**, not just wherever uploads happen, since the
+  rewrite runs on every request. **Changed:** `app/api/admin/upload/route.ts` and
+  `app/api/admin/media/route.ts` now return `/media/<pathname>` (a relative path — resolves against
+  whatever domain the page is viewed from, so no hardcoded absolute domain needed in app code)
+  instead of the SDK's own `blob.url`/`b.url`; `lib/reserved-slugs.ts` gained `"media"` (a
+  `post_categories`/`pages` slug of "media" would now collide with this new proxied route, same
+  reasoning as the other reserved segments). Pre-existing links already saved with the raw
+  `vercel-storage.com` URL (e.g. that first test upload) are unaffected — they still resolve
+  directly and aren't retroactively rewritten; only new uploads use the `/media/` path. **Verified
+  live**, not just reasoned about: added `BLOB_PUBLIC_BASE_URL` to the real local `.env` (derived
+  from the already-known `BLOB_STORE_ID`, no new upload needed — matches the user's explicit "don't
+  bother testing upload locally, only care about production" instruction), restarted the dev server
+  (`next.config.ts` changes aren't hot-reloaded), and hit `/media/blog-covers/c445c656-....jpg`
+  directly — got a real `200`, `Content-Type: image/jpeg`, 336KB, the actual file — confirming the
+  proxy mechanism itself works correctly, independent of testing a fresh upload. Typecheck/lint/
+  `npm test` (31/31)/`npm run build` all pass. **Still needed from the user, outside this session's
+  reach:** add `BLOB_PUBLIC_BASE_URL` to Vercel's Production environment variables (same place as
+  `BLOB_READ_WRITE_TOKEN`) before this takes effect on the live site. Not yet committed.
+- 2026-08-31 · HTML content editor gained an "Add Media" button (media library picker, insert at
+  cursor), a WordPress-Quicktags-style rich-text toolbar, and a taller Textarea matching the
+  Preview panel's height (not a sprint task — user request, direct follow-up to the Blog/CMS editor
+  work, given as a WordPress screenshot with the 3 asks circled/numbered) · **New:**
+  `lib/html-editor-commands.ts` — `wrapSelection`/`wrapList`/`insertAtCursor`, pure DOM-selection
+  helpers (`textarea.selectionStart/End` + `setSelectionRange`) that wrap the current selection in
+  raw HTML tags or insert text at the cursor, restoring focus/selection afterward — this is the
+  same "Quicktags" pattern WordPress's own classic Text-tab toolbar used (buttons that edit a plain
+  `<textarea>`'s raw string, not a contentEditable/WYSIWYG model), reimplemented directly rather
+  than pulling in an old jQuery-era library, since it's ~50 lines of plain selection math.
+  `app/api/admin/media/route.ts` — `requireAdminApi("admin")`-guarded `GET`, lists existing
+  `blog-covers/` uploads via `@vercel/blob`'s `list()`, newest first; catches and returns `{items:
+  []}` on any error (e.g. no `BLOB_READ_WRITE_TOKEN` configured yet) rather than 500ing, matching
+  the same fail-soft posture as the upload route. `app/admin/(protected)/media-library-dialog.tsx`
+  — a Dialog (new shadcn component, `npx shadcn add dialog`) showing a thumbnail grid of that list
+  plus an "upload new" button reusing the existing `/api/admin/upload` flow; picking or uploading
+  an image calls back into the editor with the URL. **Rewritten:**
+  `app/admin/(protected)/html-content-editor.tsx` — "Add Media" button above the HTML/Preview tabs
+  (inserts `<img src="..." alt="" />` at the textarea's cursor via `insertAtCursor`, switching to
+  HTML mode first if the admin was on Preview so the insertion is visible); a toolbar row (shown
+  only in HTML mode, since it edits raw text) with a format `<select>` (Đoạn văn/Tiêu đề 1–4),
+  Bold/Italic/Bullet-list/Numbered-list/Blockquote/Align-left/center/right/Link buttons — each a
+  thin wrapper around the new helpers. Deliberately **not** replicated: the WordPress screenshot's
+  last 2 toolbar icons (the "Insert Read More tag" and "Toolbar Toggle for more tools" icons) —
+  neither has a well-defined single equivalent for a raw-HTML-in-a-textarea editor rather than
+  WordPress's full block-based one, so guessing at a mapping seemed worse than a clean 10-button
+  set covering everything visually identifiable in the screenshot; flagging the gap rather than
+  quietly deciding it didn't matter. **Height:** both the HTML `Textarea` and the Preview `div` are
+  now a matching fixed `h-[520px]` (was `rows={22}` vs `min-h-96`, which didn't actually match) —
+  verified via `getComputedStyle` that both compute to exactly `520px`, with `overflow-y-auto` on
+  each so long content scrolls inside the box instead of growing it. **Lint fix along the way:**
+  the media dialog's initial `useEffect(() => { setLoading(true); fetch(...)... })` tripped
+  `react-hooks/set-state-in-effect` (calling setState synchronously as the first statement in an
+  effect) — restructured to a `loaded` flag set only inside the `.then()` callback, matching the
+  only other fetch-in-effect pattern already in this repo (`submit/pending/pending-confirm.tsx`),
+  which never calls setState before an async boundary either. **Verified live**, with a real
+  screenshot this time — this session's own `next dev` finally started cleanly (the concurrent
+  session from the last few entries has since stopped its server, freeing the project-folder lock)
+  — logged in via a freshly-minted admin session cookie (same HMAC technique as prior entries) and
+  drove the real running app directly: typed text into the content textarea, set a real DOM
+  selection via `setSelectionRange`, clicked the Bold button, and confirmed via `textarea.value`
+  that it became `Xin <strong>chao</strong> the gioi` with the inner selection correctly restored
+  afterward (`selectionStart/End` pointed at just "chao", focus back on the textarea); did the same
+  for the numbered-list button on the full string, confirming a real `<ol><li>...</li></ol>` wrap;
+  switched to Preview and confirmed the `<strong>` rendered as actual bold DOM, not literal text;
+  opened "Add Media" and confirmed the dialog renders and correctly shows "Chưa có ảnh nào trong
+  thư viện." (no real Blob token configured yet, same known gap as the previous entry — graceful
+  empty state, not a crash); confirmed the same editor renders identically on `/admin/pages/new`.
+  Typecheck/lint/`npm test` (31/31)/`npm run build` all pass. Not yet committed.
+- 2026-08-30 · Fixed the new WordPress-style post/page editor showing a large dead margin on the
+  left of its main column, screenshotted by the user with the empty area circled (direct follow-up
+  to the same-day Blog/CMS editor redesign entry below) · Root cause: `app/admin/(protected)/
+  layout.tsx` wraps every admin page's content in `<div className="mx-auto max-w-3xl">` — a
+  768px-wide, horizontally-centered box that every other admin page (lists, simple forms) happens
+  to fit inside without visual issue, but which caps the new editor's `1fr`-main + `320px`-sidebar
+  grid far below the space actually available on any real screen, and centers what little width it
+  gets, producing symmetric dead space on both sides — the left side is what the user's screenshot
+  circled. Removed that wrapper `div` (and its `max-w-3xl`) entirely rather than just widening it,
+  since every existing admin page already sets its own appropriate width on its own inner elements
+  (`max-w-lg`/`max-w-sm` edit forms, naturally-sized `<table>`s in `overflow-x-auto` wrappers) —
+  none of them depended on the ancestor cap to look right, so removing it only affects the one page
+  that actually needed the freed-up width. Verified via the rendered HTML (this session's own
+  `next dev` still can't start — the same concurrent-session folder lock as prior entries — so
+  fetched `/admin/posts/new` through that other session's server with a fresh admin cookie):
+  confirmed `max-w-3xl` no longer appears anywhere in the response while the editor's own
+  `lg:grid-cols-[1fr_320px]` grid classes are unchanged; could not capture an actual screenshot in
+  this environment, so the fix is confirmed at the markup/class level, not pixel-verified — flagging
+  that gap rather than claiming more than was checked. Typecheck/lint pass. Not yet committed.
+- 2026-08-30 · Blog/CMS admin editor redesigned WordPress-style, plus a real cover-image upload and
+  an admin-editable publish date (not a sprint task — user request, direct follow-up to the
+  2026-08-29 Blog/CMS entry below) · **Two decisions needed explicit user sign-off before coding,
+  not silent defaults:** (1) cover-image upload needs persistent file storage, and CLAUDE.md's own
+  Non-goals say "Supabase Storage... explicitly out of scope; do not wire them in without asking" —
+  asked, user chose **Vercel Blob** (the hosting platform's own storage) over overriding that
+  non-goal; (2) "HTML mode" in the content editor — asked whether it meant a raw-Markdown-source
+  view (keeping the previous Markdown design) or genuinely raw HTML; user chose **raw HTML, admin
+  pastes/types it directly, no Markdown involved at all**. This reverses the previous session's
+  Markdown-based content design entirely, not an addition to it. **New dependencies:** `@vercel/blob`
+  (upload), `sanitize-html` (+`@types/sanitize-html` dev). **Removed:** `react-markdown` — no longer
+  used anywhere once content became raw HTML. **New:** `lib/sanitize-post-html.ts` (extends
+  sanitize-html's defaults with `img`/`h1`/`h2`/`figure`/`figcaption` tags and `img`
+  src/alt/width/height/loading + `a` href/name/target/rel/title attributes; still strips
+  `script`/`style`/event-handler attributes by default) — called in all 4 posts/pages create+update
+  API routes before the content ever reaches the DB, so `dangerouslySetInnerHTML` on the public
+  pages renders already-sanitized content, not a live sanitize-on-read step. Defense in depth, not
+  a trust boundary against admins — only admin/super_admin accounts can ever write a post/page, same
+  as before. `app/api/admin/upload/route.ts` — `requireAdminApi("admin")`-guarded, validates
+  `image/*` mime + 5MB cap, uploads to Vercel Blob under `blog-covers/<uuid>.<ext>`, wraps the
+  `put()` call in try/catch so a missing/misconfigured `BLOB_READ_WRITE_TOKEN` 500s with a friendly
+  JSON error instead of an unhandled exception (verified live — this environment has no real token
+  configured yet, confirmed the graceful-error path fires instead of crashing; actual upload success
+  still needs the user to connect a Blob store in the Vercel dashboard and set the token).
+  `app/admin/(protected)/html-content-editor.tsx` (shared, posts+pages) — a WordPress-Text/Visual-style
+  toggle: "HTML" tab is a tall raw-source `Textarea`, "Preview" tab renders that same string via
+  `dangerouslySetInnerHTML` in the admin's own browser only (their own unsanitized draft, before
+  saving — sanitization happens server-side at save time, not here). `app/admin/(protected)/
+  cover-image-upload.tsx` (posts only — pages still have no cover image, unchanged scope) — hidden
+  file input + button, posts to the new upload route, updates the URL field on success. **Layout:**
+  both `post-form.tsx` and `page-form.tsx` rewritten into a WordPress-editor-style two-column grid
+  (`1fr` main + `320px` sidebar): main column carries title (large "Thêm tiêu đề" input)/slug/the
+  new HTML content editor/excerpt (posts only)/an SEO box (meta title/description)/a JSON-data box;
+  sidebar carries a "Đăng bài"/"Đăng trang" box (status + Save button; posts also get the new
+  publish-date field) plus, posts only, category/cover-image-upload/pillar-cluster boxes — pages
+  deliberately kept out of the cover-image and publish-date additions (matches the 2026-08-29
+  entry's original scoping: pages never had a cover image or category to begin with; a publish-date
+  field was only asked for in the context of the Post editor screenshot, so it wasn't added to pages
+  to avoid an unrequested schema change there). **Publish date:** `posts.published_at` is now a
+  plain admin-editable field (a native `datetime-local` input — deliberately not a new shadcn
+  Calendar/Popover/react-day-picker dependency chain, since a native input already renders a real
+  calendar widget in every modern browser for zero added dependencies) sent directly in the API
+  body and stored as-is; this **replaces** the previous session's "set once on first publish, never
+  reset" automatic bookkeeping entirely — an admin can now freely backdate or "schedule" a date
+  (schedule here means the field value only, not real deferred-visibility automation — a
+  published post is public immediately regardless of what date is entered; true scheduled
+  publishing would need new cron infrastructure this project doesn't have, and wasn't asked for).
+  Required server-side whenever `status = "published"` (zod `.refine`, friendly "Cần chọn ngày
+  publish." error), optional for drafts. **`app/(public)/[slug]/page.tsx` and `[slug]/[postSlug]/
+  page.tsx`:** swapped `<ReactMarkdown>` for `dangerouslySetInnerHTML={{ __html: content }}` — safe
+  specifically because `content` is already sanitized at write time, never rendered raw from
+  user input. **New env var** `BLOB_READ_WRITE_TOKEN`, documented in `.env.example` and CLAUDE.md's
+  Safety-rules env-var list (not yet set in the real `.env` — this session has no Vercel dashboard
+  access to create a Blob store). **Verified live** end-to-end via `curl` against the real
+  production Supabase DB (same constraint as the 2026-08-29 entry: this session's own `next dev`
+  can't start — a concurrent session holds the project-folder lock — so used a freshly-minted admin
+  session cookie, same HMAC technique, against that session's already-running server; the token
+  used during the previous day's verification had expired by the time this session ran, confirming
+  the 24h session expiry itself works correctly): `/admin/posts/new` and `/admin/pages/new` render
+  every expected new UI element (title input, HTML/Preview tabs, publish box, category, cover-image
+  upload button, pillar/cluster box — correctly absent on the pages form); created a real post with
+  content containing a live `<script>alert(1)</script>` and an `<img onerror=...>` XSS attempt plus
+  a backdated `publishedAt` of 2020-01-15 — confirmed in the DB and on the live public page that
+  both injection vectors were stripped (script tag gone entirely, `onerror` attribute gone, `src`
+  kept) while legitimate markup (`<b>`) survived intact, and that `published_at` matched the
+  backdated value exactly rather than being overwritten to "now"; confirmed the upload endpoint's
+  graceful-500-with-JSON-error path fires (real multipart file upload, real auth cookie) rather than
+  crashing, given no real Blob token is configured yet. All test rows deleted afterward.
+  Typecheck/lint/`npm test` (31/31)/`npm run build` all pass. Not yet committed.
+- 2026-08-29 · New Blog/CMS module: `post_categories`, `posts`, `pages` (not a sprint task — user
+  request) · Planned via /plan mode across several rounds of user-directed scope changes: started
+  from "which lightweight Node CMS library can I just import" (Keystatic/Outstatic — content in
+  git, separate admin login; Payload — forces Drizzle ORM + its own auth, both conflicting with
+  this project's explicit no-ORM decision and existing custom admin auth), landed on a purpose-fit
+  module matching the existing architecture exactly (plain Supabase tables, `requireAdminPage`/
+  `requireAdminApi`, same list/edit-form/API-route shape as `listings`). User then iteratively
+  added: a `data jsonb` field on posts/pages for future extensibility; `meta_title`/
+  `meta_description` (SEO, separate from display `title`/`excerpt`); the URL scheme
+  `/{category-slug}/{post-slug}` for posts (2 levels) and `/{page-slug}` for pages (1 level); admin
+  draft-preview; an author byline; and topical-cluster (pillar/cluster) SEO linking. Full design
+  rationale lives in the plan file this session wrote (`t-i-mu-n-c-ch-c-hazy-tome.md`).
+  **New migration** `20260829_blog_cms.sql` (additive, applied to production — confirmed via
+  `information_schema.columns`): `post_status` enum (`draft`/`published`); `post_categories`
+  (slug/name_vi/sort_order, mirrors `categories`); `posts` (title/slug/excerpt/content/
+  cover_image_url/category_id **not null** — the URL scheme requires every post to have a category
+  — /author_id→admin_users/status/published_at/meta_title/meta_description/`is_pillar`/
+  `pillar_post_id`→posts self-FK with a CHECK keeping the hierarchy flat 2-level/`data` jsonb);
+  `pages` (title/slug/content/status/meta_title/meta_description/data). RLS mirrors `categories`/
+  `listings` (public `select` only for `published`/all rows on categories); `service_role` grant
+  added explicitly (post-init tables don't inherit the init migration's blanket grant). Also
+  `alter table admin_users add column display_name text` — email is PII and never public, so a
+  byline needs a real name field, which didn't exist. **New:** `lib/slugify.ts` (Vietnamese-aware,
+  `đ/Đ` handled explicitly since NFD doesn't decompose it — has its own test file, 4 cases),
+  `lib/reserved-slugs.ts` (`admin`/`api`/`submit`/`categories`/`category`/`listing`/`rules`/`about`/
+  `blog` — rejected server-side for any `post_categories`/`pages` slug, since Next.js always prefers
+  a static route segment over the app's one shared dynamic `[slug]` folder and a colliding slug
+  would be silently unreachable). **Admin** (all under `requireAdminPage("admin")`/
+  `requireAdminApi("admin")`, same guard level as listings management): `/admin/posts` (list +
+  search/filter/paginate + create/edit form — title/slug/excerpt/content Markdown Textarea/cover
+  image URL+preview/category/status/SEO section/pillar-or-cluster section/JSON data Textarea;
+  `author_id` set server-side from the session on create, never user-editable; `published_at` set
+  once, application-side, the first time status flips to `published`, never reset on later edits,
+  same idea as `listings.first_confirmed_at`), `/admin/post-categories` (list + create/edit + real
+  delete, blocked with a friendly Vietnamese error on FK violation if posts still reference it),
+  `/admin/pages` (same shape as posts, minus category/excerpt/cover image). Sidebar gained "Bài
+  viết"/"Danh mục blog"/"Trang tĩnh". **Public:** `/blog` (all-categories index, 12/page),
+  `/{slug}` (tries `pages` first, falls back to a `post_categories` archive listing — same file,
+  since Next.js requires one dynamic segment name at a given tree position), `/{slug}/{postSlug}`
+  (post detail — resolves the outer segment as a category first, then the post within it). Both
+  detail routes: 404 for unpublished content unless the requester has a valid admin session (then
+  render with a "Xem trước" banner instead — reuses `getAdminSession()`, no new auth mechanism),
+  `generateMetadata` from `metaTitle ?? title`/`metaDescription ?? excerpt`. Pillar/cluster linking
+  is bidirectional, not just stored data: a pillar page renders a "Nội dung liên quan" section
+  linking to every one of its cluster posts; each cluster post renders a "Thuộc cụm chủ đề" link
+  back to its pillar — verified both directions render real links, not just that the DB rows exist.
+  **New dependencies:** `react-markdown` (renders admin-authored Markdown; deliberately not paired
+  with `rehype-raw`, so raw HTML never passes through — XSS-safe by construction) and
+  `@tailwindcss/typography` (dev, via `@plugin` in `globals.css` — v4 CSS-first, no config file
+  added) for readable long-form content styling. **Verified live end-to-end** against the real
+  production Supabase DB via `curl` (this session's own `next dev` couldn't start — a concurrent
+  session already holds the project-folder lock, same known limitation as prior sessions — so used
+  a real minted admin session cookie, same `createSessionToken` HMAC technique documented in
+  earlier entries below, against that concurrent session's already-running server): reserved-slug
+  rejection for both `post_categories`/`pages`; a draft post is absent from `/blog` and its own
+  category archive and 404s logged-out but renders with the preview banner for an admin session;
+  publishing makes it appear on both, and a second edit left `published_at` byte-for-byte
+  unchanged; the same draft/publish/preview cycle for a static page, and confirmed its category
+  (same first-segment slug) still resolves to the archive, not shadowed; deleting an in-use category
+  returns the friendly error, not a 500; pillar/cluster: rejected `isPillar`+`pillarPostId`
+  together and a `pillarPostId` pointing at a non-pillar post, then created a real pillar+cluster
+  pair and confirmed the reciprocal links render on both pages; author byline renders only when
+  `display_name` is set (temporarily set then reverted on the one real seeded admin account, a
+  single non-destructive column update — password/role untouched). All test rows deleted
+  afterward. Typecheck/lint/`npm test` (31/31, +4 new for `slugify`)/`npm run build` all pass. Not
+  yet committed.
 - 2026-08-29 · Homepage listing-row logo avatar enlarged to 50×50 on desktop/tablet, `object-contain`
   added so a non-square source image letterboxes instead of stretching (not a sprint task — user
   request: "size của ảnh logo mỗi listing, tăng lên 50x50 cho to hơn... ảnh không bị bể ngay cả khi

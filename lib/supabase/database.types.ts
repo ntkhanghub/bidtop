@@ -7,6 +7,8 @@ export type ListingStatus =
   | "unpublished";
 export type BidStatus = "pending" | "confirmed" | "failed";
 export type AdminRole = "admin" | "super_admin";
+export type PostStatus = "draft" | "published";
+export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
 // Hand-written to match supabase/migrations/*.sql (no Supabase CLI login available
 // for `supabase gen types typescript` — see tech-spec.md Assumptions). `Views` is
@@ -104,6 +106,7 @@ export interface Database {
           email: string;
           password_hash: string;
           role: AdminRole;
+          display_name: string | null;
           created_at: string;
         };
         Insert: {
@@ -111,8 +114,81 @@ export interface Database {
           email: string;
           password_hash: string;
           role?: AdminRole;
+          display_name?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["admin_users"]["Insert"]>;
+        Relationships: [];
+      };
+      post_categories: {
+        Row: { id: string; slug: string; name_vi: string; sort_order: number; created_at: string };
+        Insert: { id?: string; slug: string; name_vi: string; sort_order?: number };
+        Update: Partial<Database["public"]["Tables"]["post_categories"]["Insert"]>;
+        Relationships: [];
+      };
+      posts: {
+        Row: {
+          id: string;
+          title: string;
+          slug: string;
+          excerpt: string | null;
+          content: string;
+          cover_image_url: string | null;
+          category_id: string;
+          author_id: string | null;
+          status: PostStatus;
+          published_at: string | null;
+          meta_title: string | null;
+          meta_description: string | null;
+          is_pillar: boolean;
+          pillar_post_id: string | null;
+          data: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          slug: string;
+          excerpt?: string | null;
+          content: string;
+          cover_image_url?: string | null;
+          category_id: string;
+          author_id?: string | null;
+          status?: PostStatus;
+          published_at?: string | null;
+          meta_title?: string | null;
+          meta_description?: string | null;
+          is_pillar?: boolean;
+          pillar_post_id?: string | null;
+          data?: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["posts"]["Insert"]>;
+        Relationships: [];
+      };
+      pages: {
+        Row: {
+          id: string;
+          title: string;
+          slug: string;
+          content: string;
+          status: PostStatus;
+          meta_title: string | null;
+          meta_description: string | null;
+          data: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          slug: string;
+          content: string;
+          status?: PostStatus;
+          meta_title?: string | null;
+          meta_description?: string | null;
+          data?: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["pages"]["Insert"]>;
         Relationships: [];
       };
       online_heartbeats: {

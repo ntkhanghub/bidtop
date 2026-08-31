@@ -11,9 +11,7 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
         <SidebarNav showSettings={session.role === "super_admin"} />
         <AccountMenu email={session.email} role={session.role} />
       </div>
-      <div className="min-w-0 flex-1 overflow-y-auto p-8">
-        <div className="mx-auto max-w-3xl">{children}</div>
-      </div>
+      <div className="min-w-0 flex-1 overflow-y-auto p-8">{children}</div>
     </div>
   );
 }

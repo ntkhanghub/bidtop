@@ -4,13 +4,14 @@ import { hash } from "@node-rs/argon2";
 import { createClient } from "@supabase/supabase-js";
 
 // One-off script — no public admin sign-up flow exists by design (S4-T1).
-// Usage: node scripts/seed-admin.mjs <email> [admin|super_admin]
+// Usage: node scripts/seed-admin.mjs <email> [admin|super_admin] [display_name]
 const email = process.argv[2];
 if (!email) {
-  console.error("Usage: node scripts/seed-admin.mjs <email> [admin|super_admin]");
+  console.error("Usage: node scripts/seed-admin.mjs <email> [admin|super_admin] [display_name]");
   process.exit(1);
 }
 const role = process.argv[3] === "admin" ? "admin" : "super_admin";
+const displayName = process.argv[4] || null;
 
 const password = randomBytes(18).toString("base64url");
 const passwordHash = await hash(password);
@@ -23,7 +24,10 @@ const supabase = createClient(
 
 const { error } = await supabase
   .from("admin_users")
-  .upsert({ email: email.toLowerCase(), password_hash: passwordHash, role }, { onConflict: "email" });
+  .upsert(
+    { email: email.toLowerCase(), password_hash: passwordHash, role, display_name: displayName },
+    { onConflict: "email" },
+  );
 
 if (error) {
   console.error("Failed to seed admin:", error.message);

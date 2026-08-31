@@ -219,7 +219,14 @@ PROGRESS.md
   `/categories` card previews, defaults to 1 if unset, see `app/(public)/categories/page.tsx`;
   `SITE_NAME` — not a secret, the single source for the site name shown across the app (page
   title, nav, static-page copy, SePay checkout description, admin notification email subjects),
-  defaults to "BidTop.vn" if unset, see `lib/site.ts`; keep
+  defaults to "BidTop.vn" if unset, see `lib/site.ts`;
+  `BLOB_READ_WRITE_TOKEN` — Vercel Blob, blog post cover-image uploads, see
+  `app/api/admin/upload/route.ts` (user's explicit call to use Vercel's own storage rather than
+  Supabase Storage, keeping Supabase Postgres-only per Non-goals); `BLOB_PUBLIC_BASE_URL` — not a
+  secret, the same Blob store's public base URL, used only by `next.config.ts`'s `/media/*` rewrite
+  so uploaded images read as this site's own domain instead of `*.public.blob.vercel-storage.com`
+  (Vercel Blob has no custom-domain feature itself — user's explicit call to accept a reverse-proxy
+  bandwidth cost for a consistent domain); keep
   `.env.example` current and `.env` gitignored. If a secret ever lands in a commit, stop and tell
   the user — rotating it is their call.
 - Ask before anything destructive or hard to reverse: dropping/altering DB tables with data,
