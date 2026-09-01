@@ -38,6 +38,7 @@ export function SubmitForm({
     setAmount,
     categorySlug,
     setCategorySlug,
+    categoryLocked,
     setCategoryTouched,
     email,
     setEmail,
@@ -112,6 +113,14 @@ export function SubmitForm({
             <Plus className="size-4" />
           </button>
         </div>
+        {lookup && !lookup.isNew && (
+          <div className="mt-2 flex items-center justify-between rounded-md bg-accent/10 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">Số tiền cần phải trả thêm</span>
+            <span className="font-medium text-foreground">
+              {Math.max(0, (Number(amount) || 0) - lookup.currentAmount).toLocaleString("vi-VN")}đ
+            </span>
+          </div>
+        )}
         {amountError && <p className="mt-1 text-sm text-destructive">{amountError}</p>}
       </div>
 
@@ -120,6 +129,7 @@ export function SubmitForm({
           Danh mục <span className="text-destructive">*</span>
         </Label>
         <Select
+          disabled={categoryLocked}
           value={categorySlug}
           onValueChange={(value) => {
             setCategorySlug(value);
@@ -137,6 +147,11 @@ export function SubmitForm({
             ))}
           </SelectContent>
         </Select>
+        {categoryLocked && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Danh mục khoá theo listing đã có, không đổi được.
+          </p>
+        )}
       </div>
 
       <div>

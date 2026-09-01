@@ -13,7 +13,7 @@ type Listing = {
   logo_url: string | null;
   description: string | null;
   category_id: string;
-  updated_at: string;
+  created_at: string;
 };
 type ActivityItem = {
   id: string;

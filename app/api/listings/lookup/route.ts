@@ -35,10 +35,23 @@ export async function POST(request: Request) {
   const isNew = !existing;
   const currentAmount = existing?.amount ?? 0;
 
+  // An existing listing's category is fixed on this response, not left to the
+  // client's own AI-classify guess — the submit form locks the field to it.
+  let categorySlug: string | null = null;
+  if (existing) {
+    const { data: category } = await supabase
+      .from("categories")
+      .select("slug")
+      .eq("id", existing.category_id)
+      .maybeSingle();
+    categorySlug = category?.slug ?? null;
+  }
+
   return NextResponse.json({
     identityKey,
     isNew,
     currentAmount,
     minimumRequired: isNew ? startingPrice : currentAmount + minIncrement,
+    categorySlug,
   });
 }

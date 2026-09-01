@@ -36,6 +36,43 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-09-01 · Homepage/category leaderboard rows now show a listing's `created_at` instead of
+  `updated_at` for the "X phút/ngày trước" timestamp (not a sprint task — user question then
+  request: `updated_at` is bumped by the `listings_set_updated_at` trigger on *any* row change —
+  a new bid, but also an unrelated admin edit — so a listing an admin merely edited read as
+  freshly active even with no real new activity) · Swapped the column in both `select()` calls
+  (`app/(public)/page.tsx`, `app/(public)/category/[slug]/page.tsx`) and the `Listing` type in the
+  two shared components that read it (`leaderboard.tsx`, `listing-row.tsx`); `timeAgoVi()` itself
+  untouched, only which field feeds it. Lint/typecheck/`npm test` (31/31) all pass. Verified live
+  against real production data: the current #1 listing (`vietnam-canada-edu.org`) has
+  `created_at` 2026-08-27 but `updated_at` 2026-09-01 (today, from a very recent bid) — confirmed
+  the homepage now reads "5 ngày trước" for it, not "vài phút trước" as it would have under the
+  old field. Not yet committed.
+- 2026-09-01 · `/submit`'s top-up path (existing URL) now locks the category field to the
+  listing's real category and shows the incremental amount due, mocked up first via the
+  `visualize` widget tool for the user's sign-off before coding (not a sprint task — user request)
+  · `app/api/listings/lookup/route.ts` now also resolves and returns `categorySlug` (a second
+  `categories` query by the existing listing's `category_id` — this repo doesn't use Supabase's
+  embedded-relation selects anywhere else, so kept the same flat-query-plus-JS-join pattern used
+  everywhere else rather than introducing that syntax for the first time here) for existing
+  listings, `null` for new ones. `use-submit-form.ts`'s `handleIdentityBlur`: when the lookup
+  finds an existing listing, sets `categorySlug` to that real value and marks it `categoryTouched`
+  instead of calling `/api/listings/classify` at all (classify is AI-guessed and was never
+  authoritative for a listing that already has a real category) — exposes a new derived
+  `categoryLocked` boolean (`lookup !== null && !lookup.isNew`). `submit-form.tsx`: passes
+  `disabled={categoryLocked}` to the category `Select` plus a "Danh mục khoá theo listing đã có,
+  không đổi được." note, and a new box under the amount stepper showing "Số tiền cần phải trả
+  thêm" = `amount − lookup.currentAmount`, live as the amount changes — both only rendered when
+  `lookup && !lookup.isNew`. Confirmed via `app/api/listings/submit/route.ts` that the top-up
+  branch never writes `category_id` at all — so the old unlocked dropdown was actively misleading
+  (picking a different category on top-up silently did nothing); this closes that UI/backend
+  mismatch, not just a cosmetic addition. Lint/typecheck/`npm test` (31/31) all pass. Verified live
+  against real production data (marineconnect.sg/en, currently 100.000đ): hint, locked category
+  showing the listing's actual category, and the live-updating "cần trả thêm" figure (125.000 −
+  100.000 = 25.000đ, then 150.000 − 100.000 = 50.000đ after clicking `+`) all correct; confirmed
+  the `Select`'s `data-disabled` attribute is actually set, not just visually greyed; regression-
+  tested a brand-new URL still leaves the category open (AI-classified, changeable) and shows no
+  "cần trả thêm" box. Not yet committed.
 - 2026-09-01 · A listing row's "Giành hạng này với X" button now pre-fills `/submit`'s URL field
   with that row's own `display_url`, not just the suggested amount (not a sprint task — user
   report: the field was empty after clicking it) · `app/(public)/_components/listing-row.tsx`'s

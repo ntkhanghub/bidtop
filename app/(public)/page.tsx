@@ -48,7 +48,7 @@ export default async function Home({
     supabase
       .from("listings")
       .select(
-        "id, display_url, amount, title, logo_url, description, category_id, updated_at",
+        "id, display_url, amount, title, logo_url, description, category_id, created_at",
         { count: "exact" },
       )
       .eq("status", "approved")

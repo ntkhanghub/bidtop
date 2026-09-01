@@ -15,7 +15,7 @@ type Listing = {
   title: string | null;
   logo_url: string | null;
   description: string | null;
-  updated_at: string;
+  created_at: string;
 };
 type Category = { slug: string; name: string };
 
@@ -108,7 +108,7 @@ export function ListingRow({
               {category.name}
             </Link>
             <span>·</span>
-            <span>{timeAgoVi(listing.updated_at)}</span>
+            <span>{timeAgoVi(listing.created_at)}</span>
             <span>·</span>
             <span>{bareUrl}</span>
             {showClickCount && (

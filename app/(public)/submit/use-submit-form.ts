@@ -16,6 +16,7 @@ type LookupResult = {
   isNew: boolean;
   currentAmount: number;
   minimumRequired: number;
+  categorySlug: string | null;
 };
 
 export function useSubmitForm({
@@ -44,13 +45,14 @@ export function useSubmitForm({
   async function handleIdentityBlur() {
     if (!identity.trim()) return;
     setLookupError(null);
+    let data;
     try {
       const res = await fetch("/api/listings/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identity }),
       });
-      const data = await res.json();
+      data = await res.json();
       if (!res.ok) {
         setLookup(null);
         setLookupError(data.error ?? "Không đọc được URL/@handle.");
@@ -63,15 +65,20 @@ export function useSubmitForm({
       return;
     }
 
-    if (!categoryTouched) {
+    // An existing listing's category is fixed, not left to the AI-classify
+    // guess — lock the field to it instead of calling classify at all.
+    if (!data.isNew && data.categorySlug) {
+      setCategorySlug(data.categorySlug);
+      setCategoryTouched(true);
+    } else if (!categoryTouched) {
       fetch("/api/listings/classify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identity }),
       })
         .then((res) => res.json())
-        .then((data: { slug?: string }) => {
-          if (data.slug && !categoryTouched) setCategorySlug(data.slug);
+        .then((classifyData: { slug?: string }) => {
+          if (classifyData.slug && !categoryTouched) setCategorySlug(classifyData.slug);
         })
         .catch(() => {});
     }
@@ -133,6 +140,8 @@ export function useSubmitForm({
     }
   }
 
+  const categoryLocked = lookup !== null && !lookup.isNew;
+
   return {
     identity,
     setIdentity,
@@ -142,6 +151,7 @@ export function useSubmitForm({
     setAmount,
     categorySlug,
     setCategorySlug,
+    categoryLocked,
     setCategoryTouched,
     email,
     setEmail,
