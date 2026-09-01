@@ -39,5 +39,6 @@ on conflict (slug) do update set name_vi = excluded.name_vi, sort_order = exclud
 insert into settings (key, value) values
   ('starting_price', '100000'),
   ('min_increment', '50000'),
-  ('vat_percent', '8')
+  ('vat_percent', '8'),
+  ('show_click_count', 'false')
 on conflict (key) do nothing;

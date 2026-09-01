@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -10,16 +11,19 @@ export function SettingsForm({
   startingPrice,
   minIncrement,
   vatPercent,
+  showClickCount,
 }: {
   startingPrice: number;
   minIncrement: number;
   vatPercent: number;
+  showClickCount: boolean;
 }) {
   const [values, setValues] = useState({
     starting_price: String(startingPrice),
     min_increment: String(minIncrement),
     vat_percent: String(vatPercent),
   });
+  const [showClicks, setShowClicks] = useState(showClickCount);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
@@ -32,6 +36,7 @@ export function SettingsForm({
         starting_price: Number(values.starting_price),
         min_increment: Number(values.min_increment),
         vat_percent: Number(values.vat_percent),
+        show_click_count: showClicks,
       }),
     });
     const data = await res.json();
@@ -75,6 +80,13 @@ export function SettingsForm({
           className="mt-1 font-mono"
         />
       </div>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={showClicks}
+          onCheckedChange={(v) => setShowClicks(v === true)}
+        />
+        Hiện số click mỗi listing trên trang chủ/danh mục
+      </label>
       <Button type="submit" disabled={submitting}>
         {submitting ? "Đang lưu..." : "Lưu"}
       </Button>

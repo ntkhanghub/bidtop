@@ -19,11 +19,13 @@ type Category = { slug: string; name_vi: string };
 export function SubmitForm({
   categories,
   initialAmount,
+  initialUrl,
   startingPrice,
   minIncrement,
 }: {
   categories: Category[];
   initialAmount?: number;
+  initialUrl?: string;
   startingPrice: number;
   minIncrement: number;
 }) {
@@ -44,7 +46,7 @@ export function SubmitForm({
     submitting,
     handleIdentityBlur,
     handleSubmit,
-  } = useSubmitForm({ categories, initialAmount, startingPrice });
+  } = useSubmitForm({ categories, initialAmount, initialUrl, startingPrice });
 
   function step(delta: number) {
     const next = Math.max(0, (Number(amount) || 0) + delta);

@@ -4,9 +4,9 @@ import { SubmitForm } from "./submit-form";
 export default async function SubmitPage({
   searchParams,
 }: {
-  searchParams: Promise<{ amount?: string }>;
+  searchParams: Promise<{ amount?: string; url?: string }>;
 }) {
-  const { amount } = await searchParams;
+  const { amount, url } = await searchParams;
   const [{ data: categories }, { data: settingsRows }] = await Promise.all([
     supabase.from("categories").select("slug, name_vi").order("sort_order"),
     supabase.from("settings").select("key, value").in("key", ["min_increment", "starting_price"]),
@@ -26,6 +26,7 @@ export default async function SubmitPage({
       <SubmitForm
         categories={categories ?? []}
         initialAmount={amount ? Number(amount) : undefined}
+        initialUrl={url}
         startingPrice={startingPrice}
         minIncrement={minIncrement}
       />

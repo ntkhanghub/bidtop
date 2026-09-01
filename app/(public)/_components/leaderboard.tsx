@@ -48,6 +48,7 @@ export function Leaderboard({
   showClaimBanner = true,
   categoryMap,
   clickCounts,
+  showClickCount,
   activityItems,
 }: {
   listings: Listing[];
@@ -60,6 +61,7 @@ export function Leaderboard({
   showClaimBanner?: boolean;
   categoryMap: Record<string, { slug: string; name: string }>;
   clickCounts: Record<string, number>;
+  showClickCount: boolean;
   activityItems?: ActivityItem[];
 }) {
   function pageHref(targetPage: number) {
@@ -103,6 +105,7 @@ export function Leaderboard({
                 minIncrement={minIncrement}
                 category={categoryMap[listing.category_id] ?? { slug: "other", name: "—" }}
                 clickCount={clickCounts[listing.id] ?? 0}
+                showClickCount={showClickCount}
               />
               {rank === 3 && activityItems && activityItems.length > 0 && (
                 <li>

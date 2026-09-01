@@ -41,14 +41,18 @@ export default async function CategoryPage({
         .order("amount", { ascending: false })
         .order("first_confirmed_at", { ascending: true })
         .range(from, to),
-      supabase.from("settings").select("key, value").in("key", ["min_increment", "starting_price"]),
+      supabase
+        .from("settings")
+        .select("key, value")
+        .in("key", ["min_increment", "starting_price", "show_click_count"]),
       supabase.from("categories").select("slug, name_vi").order("sort_order"),
     ]);
   if (error) throw error;
 
-  const settings = Object.fromEntries((settingsRows ?? []).map((s) => [s.key, Number(s.value)]));
+  const settings = Object.fromEntries((settingsRows ?? []).map((s) => [s.key, s.value]));
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
   const clickCounts = await getClickCounts((listings ?? []).map((l) => l.id));
+  const showClickCount = settings.show_click_count === "true";
 
   return (
     <main className="mx-auto max-w-[900px] px-4 py-12">
@@ -59,11 +63,12 @@ export default async function CategoryPage({
         page={page}
         pageSize={PAGE_SIZE}
         totalPages={totalPages}
-        minIncrement={settings.min_increment ?? 50000}
-        startingPrice={settings.starting_price ?? 100000}
+        minIncrement={Number(settings.min_increment ?? 50000)}
+        startingPrice={Number(settings.starting_price ?? 100000)}
         baseHref={`/category/${category.slug}`}
         categoryMap={{ [category.id]: { slug: category.slug, name: category.name_vi } }}
         clickCounts={clickCounts}
+        showClickCount={showClickCount}
       />
     </main>
   );

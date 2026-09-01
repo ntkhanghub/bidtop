@@ -55,7 +55,10 @@ export default async function Home({
       .order("amount", { ascending: false })
       .order("first_confirmed_at", { ascending: true })
       .range(from, to),
-    supabase.from("settings").select("key, value").in("key", ["min_increment", "starting_price"]),
+    supabase
+      .from("settings")
+      .select("key, value")
+      .in("key", ["min_increment", "starting_price", "show_click_count"]),
     supabase
       .from("bids")
       .select("id, listing_id, delta_amount, confirmed_at")
@@ -67,7 +70,7 @@ export default async function Home({
 
   if (error) throw error;
 
-  const settings = Object.fromEntries((settingsRows ?? []).map((s) => [s.key, Number(s.value)]));
+  const settings = Object.fromEntries((settingsRows ?? []).map((s) => [s.key, s.value]));
   const categoryMap = Object.fromEntries(
     (categories ?? []).map((c) => [c.id, { slug: c.slug, name: c.name_vi }]),
   );
@@ -103,8 +106,9 @@ export default async function Home({
   const clickCounts = await getClickCounts((listings ?? []).map((l) => l.id));
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
-  const minIncrement = settings.min_increment ?? 50000;
-  const startingPrice = settings.starting_price ?? 100000;
+  const minIncrement = Number(settings.min_increment ?? 50000);
+  const startingPrice = Number(settings.starting_price ?? 100000);
+  const showClickCount = settings.show_click_count === "true";
   const topClaimAmount =
     page === 1 && (listings ?? []).length > 0 ? listings![0].amount + minIncrement : startingPrice;
 
@@ -131,6 +135,7 @@ export default async function Home({
         showClaimBanner={false}
         categoryMap={categoryMap}
         clickCounts={clickCounts}
+        showClickCount={showClickCount}
         activityItems={page === 1 ? activityItems : undefined}
       />
     </main>

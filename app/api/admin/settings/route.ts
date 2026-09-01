@@ -7,6 +7,7 @@ const bodySchema = z.object({
   starting_price: z.number().int().positive(),
   min_increment: z.number().int().positive(),
   vat_percent: z.number().int().min(0).max(100),
+  show_click_count: z.boolean(),
 });
 
 export async function POST(request: Request) {

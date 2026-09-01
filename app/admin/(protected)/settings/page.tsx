@@ -10,7 +10,7 @@ export default async function AdminSettingsPage() {
   const { data: rows } = await supabase
     .from("settings")
     .select("key, value")
-    .in("key", ["starting_price", "min_increment", "vat_percent"]);
+    .in("key", ["starting_price", "min_increment", "vat_percent", "show_click_count"]);
   const settings = Object.fromEntries((rows ?? []).map((r) => [r.key, r.value]));
 
   return (
@@ -20,6 +20,7 @@ export default async function AdminSettingsPage() {
         startingPrice={Number(settings.starting_price ?? 0)}
         minIncrement={Number(settings.min_increment ?? 0)}
         vatPercent={Number(settings.vat_percent ?? 0)}
+        showClickCount={settings.show_click_count === "true"}
       />
     </div>
   );

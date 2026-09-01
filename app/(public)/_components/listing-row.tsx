@@ -25,12 +25,14 @@ export function ListingRow({
   minIncrement,
   category,
   clickCount,
+  showClickCount,
 }: {
   listing: Listing;
   rank: number;
   minIncrement: number;
   category: Category;
   clickCount: number;
+  showClickCount: boolean;
 }) {
   const claimAmount = listing.amount + minIncrement;
   const isTopRank = rank === 1;
@@ -109,8 +111,12 @@ export function ListingRow({
             <span>{timeAgoVi(listing.updated_at)}</span>
             <span>·</span>
             <span>{bareUrl}</span>
-            <span>·</span>
-            <span>{clickCount.toLocaleString("vi-VN")} clicks</span>
+            {showClickCount && (
+              <>
+                <span>·</span>
+                <span>{clickCount.toLocaleString("vi-VN")} clicks</span>
+              </>
+            )}
             <span>·</span>
             <Link
               href={`/listing/${listing.id}`}
@@ -123,7 +129,7 @@ export function ListingRow({
       </div>
 
       <Link
-        href={`/submit?amount=${claimAmount}`}
+        href={`/submit?amount=${claimAmount}&url=${encodeURIComponent(listing.display_url)}`}
         className="pointer-events-none absolute top-0 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent px-3 py-1 text-xs font-semibold whitespace-nowrap text-accent-foreground opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
       >
         Giành hạng này với {claimAmount.toLocaleString("vi-VN")}đ

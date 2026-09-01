@@ -36,6 +36,58 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-09-01 · A listing row's "Giành hạng này với X" button now pre-fills `/submit`'s URL field
+  with that row's own `display_url`, not just the suggested amount (not a sprint task — user
+  report: the field was empty after clicking it) · `app/(public)/_components/listing-row.tsx`'s
+  claim link gains `&url=${encodeURIComponent(listing.display_url)}`; `submit/page.tsx` reads the
+  new `url` search param and passes it to `SubmitForm` as `initialUrl`; `use-submit-form.ts` seeds
+  `identity` state from it and, on mount, fires the same lookup a manual blur would (via
+  `setTimeout(..., 0)` so the lookup's `setState` calls don't run synchronously inside the effect
+  — `react-hooks/set-state-in-effect` flagged the direct call otherwise) so the "Đã có listing —
+  nâng bid tối thiểu Yđ" hint shows immediately instead of waiting for the user to click into and
+  out of the field. This only changes the per-row button (already this specific listing's own top-
+  up shortcut, matching the page's own copy: "Đã có listing rồi? Nhập lại URL... để nâng hạng") —
+  the generic "Giành hạng #1" banner (not tied to any one listing) is untouched. Lint/typecheck/
+  `npm test` (31/31) all pass. Verified live against real production data: clicking a listing's own
+  claim link landed on `/submit` with the URL field already containing that exact `display_url`
+  and the "Đã có listing (100.000đ) — nâng bid tối thiểu 125.000đ." hint already showing, no manual
+  blur needed; confirmed the plain `/submit` (hero form, no query params) still starts empty, no
+  regression. Not yet committed.
+- 2026-09-01 · Admin: "show click count" setting + `/admin/listings` redesigned as a sortable table
+  (not a sprint task — user request) · **Setting:** new `settings` key `show_click_count`
+  (text `"true"`/`"false"`, defaults to `"false"` — click counts stay hidden unless explicitly
+  turned on), seeded via `supabase/seed.sql` (additive, applied to production with `npm run
+  db:seed`). Editable on `/admin/settings` (`settings-form.tsx`, a `Checkbox`, super_admin only —
+  same guard as the existing pricing fields) and enforced in `app/api/admin/settings/route.ts`'s
+  zod schema. `app/(public)/page.tsx` and `app/(public)/category/[slug]/page.tsx` now read this key
+  alongside `min_increment`/`starting_price` (their settings map switched from eagerly
+  `Number(s.value)`-coercing every row to keeping raw strings, with `Number(...)` moved to each
+  numeric field's own read site — `show_click_count` isn't numeric and would've come back `NaN`
+  otherwise) and thread a new `showClickCount` boolean prop through `Leaderboard` →
+  `ListingRow`, which now wraps the existing "N clicks" span (and its separator dot) in that
+  condition instead of always rendering it. **Table:** `/admin/listings` (`page.tsx` +
+  `listings/listing-row.tsx`) rebuilt from a `Card`-per-listing list into a real `<table>`, still
+  20/page. New columns: Total click (via the same `getClickCounts` head-count-per-listing helper
+  already used by the public leaderboard), Ngày tạo, Ngày update (both already existed as columns
+  on `listings`, just not surfaced here before). All 5 non-action columns (Listing/title, Số tiền,
+  Total click, Ngày tạo, Ngày update) are sortable via clickable header links that toggle
+  asc/desc and reset to page 1, `?sort=`/`?dir=` in the URL (bookmarkable, same zero-JS GET-form
+  pattern as the existing filters). Total click has no DB column to `ORDER BY` on, so — instead of
+  a new denormalized counter column + trigger — the whole filtered set is fetched unpaginated,
+  merged with click counts, sorted, and sliced in memory; confirmed acceptable at this table's real
+  current size (21 listings total in production) rather than adding schema complexity for a scale
+  problem that doesn't exist yet. `description` dropped from the row (no column asked for it, and
+  it doesn't fit a compact table row) — still editable on `/admin/listings/[id]`, so no data or
+  capability lost, just not previewed in the list anymore. Lint/typecheck/`npm run build`/`npm
+  test` (31/31) all pass. **Verified live** against real production data: toggled
+  `settings.show_click_count` directly (`true` then back to `false`) via a temporary read-only-DB
+  script and confirmed the homepage's "N clicks" text appears/disappears accordingly (same
+  temporary-toggle-then-restore pattern used for the pricing settings in the 2026-08-24 entry).
+  **Not independently verified:** the `/admin/listings` table's own rendering, sort links, and
+  action buttons — this session's admin-session-cookie-minting script (same technique documented in
+  several earlier entries) was blocked by this session's own auto-mode classifier, the same
+  restriction hit on 2026-08-29 (see that entry). Asked the user to check `/admin/listings` and
+  `/admin/settings` themselves after logging in. Not yet committed.
 - 2026-09-01 · Homepage listing logos changed from circular to rounded-square (not a sprint task —
   user request) · `app/(public)/_components/listing-row.tsx`'s `Avatar`/`AvatarImage`/
   `AvatarFallback` now take a `rounded-lg` override on top of the shared `Avatar` component's

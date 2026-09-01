@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Category = { slug: string; name_vi: string };
 
@@ -21,14 +21,16 @@ type LookupResult = {
 export function useSubmitForm({
   categories,
   initialAmount,
+  initialUrl,
   startingPrice = 0,
 }: {
   categories: Category[];
   initialAmount?: number;
+  initialUrl?: string;
   startingPrice?: number;
 }) {
   const router = useRouter();
-  const [identity, setIdentity] = useState("");
+  const [identity, setIdentity] = useState(initialUrl ?? "");
   const [lookup, setLookup] = useState<LookupResult | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [amount, setAmount] = useState(String(initialAmount ?? startingPrice));
@@ -74,6 +76,19 @@ export function useSubmitForm({
         .catch(() => {});
     }
   }
+
+  // Coming from a listing row's "Giành hạng này với X" button pre-fills the
+  // URL — run the same lookup a manual blur would trigger, once, so the
+  // "đã có listing, nâng bid tối thiểu Yđ" hint shows immediately instead of
+  // waiting for the user to click into and back out of the field. Deferred via
+  // setTimeout, not called directly, so its setState calls don't run
+  // synchronously inside the effect (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    if (!initialUrl) return;
+    const timer = setTimeout(() => handleIdentityBlur(), 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
