@@ -65,3 +65,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdminApi("admin");
+  if (!auth.ok) return auth.response;
+
+  const { id } = await params;
+  const { error } = await supabase.from("pages").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: "Không xoá được trang." }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
+}

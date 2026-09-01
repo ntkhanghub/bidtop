@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { Layers } from "lucide-react";
 import { getAdminSession } from "@/lib/auth/require-admin";
 import { formatVnDate } from "@/lib/format-vn-datetime";
 import { supabase } from "@/lib/supabase/server";
@@ -91,8 +92,9 @@ export default async function PostDetailPage({
       {pillar && (
         <Link
           href={`/${categorySlugMap.get(pillar.category_id) ?? category.slug}/${pillar.slug}`}
-          className="mb-4 inline-block rounded-md bg-accent/10 px-3 py-1.5 text-sm text-accent hover:underline"
+          className="mb-4 inline-flex items-center gap-1.5 rounded-md bg-accent/10 px-3 py-1.5 text-sm text-accent hover:underline"
         >
+          <Layers className="size-4" />
           Thuộc cụm chủ đề: {pillar.title}
         </Link>
       )}
@@ -122,22 +124,24 @@ export default async function PostDetailPage({
 
       {post.is_pillar && clusters && clusters.length > 0 && (
         <section className="mt-10 border-t border-border pt-6">
-          <h2 className="text-lg font-semibold text-foreground">
-            Nội dung liên quan trong cụm chủ đề này
+          <h2 className="flex items-center gap-1.5 text-lg font-semibold text-foreground">
+            <Layers className="size-4 text-accent" />
+            Nội dung trong cụm chủ đề này ({clusters.length})
           </h2>
-          <ul className="mt-3 flex flex-col gap-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
             {clusters.map((c) => (
-              <li key={c.id}>
-                <Link
-                  href={`/${categorySlugMap.get(c.category_id) ?? category.slug}/${c.slug}`}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  {c.title}
-                </Link>
-                {c.excerpt && <p className="text-sm text-muted-foreground">{c.excerpt}</p>}
-              </li>
+              <Link
+                key={c.id}
+                href={`/${categorySlugMap.get(c.category_id) ?? category.slug}/${c.slug}`}
+                className="rounded-lg bg-muted p-3 hover:bg-muted/70"
+              >
+                <p className="line-clamp-2 font-medium text-foreground">{c.title}</p>
+                {c.excerpt && (
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{c.excerpt}</p>
+                )}
+              </Link>
             ))}
-          </ul>
+          </div>
         </section>
       )}
     </main>

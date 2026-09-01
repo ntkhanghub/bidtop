@@ -5,6 +5,7 @@ import { requireAdminPage } from "@/lib/auth/require-admin";
 import { formatVnDateTime } from "@/lib/format-vn-datetime";
 import { supabase } from "@/lib/supabase/server";
 import { POST_STATUS_BADGE } from "../post-status";
+import { DeletePageButton } from "./delete-page-button";
 
 export default async function AdminPagesPage() {
   await requireAdminPage("admin");
@@ -49,9 +50,12 @@ export default async function AdminPagesPage() {
                     </td>
                     <td className="py-1.5 whitespace-nowrap">{formatVnDateTime(page.updated_at)}</td>
                     <td className="py-1.5 text-right">
-                      <Link href={`/admin/pages/${page.id}`} className="text-sm hover:underline">
-                        Sửa
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link href={`/admin/pages/${page.id}`} className="text-sm hover:underline">
+                          Sửa
+                        </Link>
+                        <DeletePageButton pageId={page.id} />
+                      </div>
                     </td>
                   </tr>
                 );

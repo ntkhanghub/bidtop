@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase/server";
 import { PostCard } from "../_components/post-card";
+import { PostCategoryFilter } from "../_components/post-category-filter";
 
 export const revalidate = 30;
 
@@ -36,6 +37,9 @@ export default async function BlogPage({
   return (
     <main className="mx-auto max-w-[900px] px-4 py-12">
       <h1 className="text-2xl font-bold text-foreground">Blog</h1>
+      <div className="mt-4">
+        <PostCategoryFilter categories={categories ?? []} />
+      </div>
 
       {!posts || posts.length === 0 ? (
         <p className="mt-6 text-muted-foreground">Chưa có bài viết nào.</p>

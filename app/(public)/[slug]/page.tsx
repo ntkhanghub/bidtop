@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { getAdminSession } from "@/lib/auth/require-admin";
 import { supabase } from "@/lib/supabase/server";
 import { PostCard } from "../_components/post-card";
+import { PostCategoryFilter } from "../_components/post-category-filter";
 
 export const revalidate = 30;
 
@@ -84,19 +85,25 @@ export default async function SlugPage({
   const from = (pageNum - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  const { data: posts, count } = await supabase
-    .from("posts")
-    .select("id, title, slug, excerpt, cover_image_url, published_at", { count: "exact" })
-    .eq("category_id", category.id)
-    .eq("status", "published")
-    .order("published_at", { ascending: false })
-    .range(from, to);
+  const [{ data: posts, count }, { data: allCategories }] = await Promise.all([
+    supabase
+      .from("posts")
+      .select("id, title, slug, excerpt, cover_image_url, published_at", { count: "exact" })
+      .eq("category_id", category.id)
+      .eq("status", "published")
+      .order("published_at", { ascending: false })
+      .range(from, to),
+    supabase.from("post_categories").select("slug, name_vi"),
+  ]);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
   return (
     <main className="mx-auto max-w-[900px] px-4 py-12">
       <h1 className="text-2xl font-bold text-foreground">{category.name_vi}</h1>
+      <div className="mt-4">
+        <PostCategoryFilter categories={allCategories ?? []} activeSlug={category.slug} />
+      </div>
 
       {!posts || posts.length === 0 ? (
         <p className="mt-6 text-muted-foreground">Chưa có bài viết nào.</p>

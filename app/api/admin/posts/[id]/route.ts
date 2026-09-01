@@ -115,3 +115,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdminApi("admin");
+  if (!auth.ok) return auth.response;
+
+  const { id } = await params;
+  const { error } = await supabase.from("posts").delete().eq("id", id);
+
+  if (error) {
+    if (error.code === "23503") {
+      return NextResponse.json(
+        { error: "Bài viết đang là Pillar của các bài khác, không thể xoá." },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json({ error: "Không xoá được bài viết." }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
+}

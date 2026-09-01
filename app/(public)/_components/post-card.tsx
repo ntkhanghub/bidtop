@@ -34,7 +34,7 @@ export function PostCard({
       )}
       <div className="flex flex-1 flex-col gap-1.5 p-4">
         {categoryName && (
-          <span className="text-xs font-medium text-accent">{categoryName}</span>
+          <span className="text-xs font-medium text-primary">{categoryName}</span>
         )}
         <h3 className="line-clamp-2 font-medium text-foreground">{post.title}</h3>
         {post.excerpt && (

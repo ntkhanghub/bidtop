@@ -36,6 +36,58 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-09-02 · Blog follow-up: real delete for posts/pages, `/blog`+category-archive visual
+  redesign, pillar/cluster relationship redesign — all via /plan mode with 2 approved mockup
+  widgets first (not a sprint task — user request) · **Q&A answered directly before planning:**
+  confirmed via grep that posts/pages had zero delete capability (only `post_categories` had a
+  `DELETE` route) — matched the original soft-state design intent, not a bug. **Mockup-then-build
+  workflow:** drew 2 widget mockups for review (blog listing/category grid; pillar↔cluster
+  relationship display) using the site's real Tailwind color tokens (not the generic mockup-tool
+  palette) so they'd read as an actual preview, not a generic wireframe. User asked to drop the
+  "Pillar" badge from listing cards (done, re-rendered for confirmation) and asked a real SEO
+  question about the pillar/cluster callout: is an explicit "Thuộc cụm chủ đề" link too obvious for
+  Google's guidelines? **Checked Google's own Search Central docs rather than guessing**
+  (`developers.google.com/search/docs/crawling-indexing/links-crawlable` and
+  `.../essentials/spam-policies`): explicit, labeled internal links connecting related content are
+  the recommended pattern, not a link-spam pattern — spam policies target hidden links,
+  exact-match anchor stuffing, and paid/exchanged links, none of which apply to a single visible
+  on-site navigational link. User kept the explicit design as-is once confirmed safe. Both mockups
+  were then approved unmodified (after the one fix above) and built exactly as designed — no
+  further changes needed once implementation started. **New (delete):**
+  `app/admin/(protected)/posts/delete-post-button.tsx` and `.../pages/delete-page-button.tsx`
+  (near-copies of the existing `post-categories/delete-category-button.tsx` — `window.confirm` →
+  `fetch DELETE` → toast → `router.refresh()`, not a shared generic component, matching this
+  codebase's existing per-feature-copy convention). `DELETE` handlers added to
+  `app/api/admin/posts/[id]/route.ts` and `.../pages/[id]/route.ts`, wired into both admin list
+  pages next to "Sửa". Posts catch a `23503` FK violation (a post still referenced as another
+  post's `pillar_post_id`, since that FK has no `on delete` clause) and return "Bài viết đang là
+  Pillar của các bài khác, không thể xoá." instead of a raw 500 — mirrors the existing
+  `post_categories` delete's FK-violation handling exactly. Deliberately does **not** delete the
+  post's Blob-stored cover image on post delete, since the media library allows reusing an image
+  across posts — deleting the file would silently break any other post still using it. **New
+  (redesign):** `app/(public)/_components/post-category-filter.tsx` — a pill-row filter for
+  `post_categories` (active = solid `bg-primary`, matching the approved mockup), intentionally a
+  new component rather than a modification of the existing business-side `category-filter.tsx`
+  (different route target, different color choice — separate concern, not touching working code).
+  `post-card.tsx`'s category label recolored `text-accent` → `text-primary` to match the mockup.
+  `/blog` and `[slug]/page.tsx`'s category-archive branch both render the new filter (the latter
+  gained one new `post_categories` list query it didn't have before). `[slug]/[postSlug]/page.tsx`:
+  the cluster→pillar callout gained a `Layers` (lucide-react) icon; the pillar→clusters section
+  changed from a bare `<ul>` of links to a card grid (`grid-cols-1 sm:grid-cols-2 md:grid-cols-3`,
+  `rounded-lg bg-muted` mini-cards) with the same `Layers` icon in its heading — no query changes,
+  the existing `clusters`/`pillar` fetches already had everything the new markup needs. **Verified
+  live** via `curl` against this session's own dev server (finally unblocked — no concurrent
+  session holding the port) with a fresh admin session cookie: created a real category + pillar
+  post + cluster post + a test page; confirmed the filter pill row, `text-primary` category label,
+  and no Pillar badge render on both `/blog` and the category archive; confirmed the pillar page's
+  cluster grid renders (`Nội dung trong cụm chủ đề này (1)`, correct count) and the cluster page's
+  callout renders (`Thuộc cụm chủ đề: <pillar title>`) — both confirmed via direct string search on
+  the raw HTML, correctly accounting for React's SSR `<!-- -->` hydration comment markers between
+  interpolated values that broke a naive first attempt. Confirmed delete is correctly blocked while
+  the pillar still has a cluster pointing at it (real 400 + friendly message), then succeeds for
+  both once the cluster is deleted first; confirmed the page delete endpoint too. All test rows
+  cleaned up afterward. Typecheck/lint/`npm test` (31/31)/`npm run build` all pass. Not yet
+  committed.
 - 2026-09-01 · Homepage/category leaderboard rows now show a listing's `created_at` instead of
   `updated_at` for the "X phút/ngày trước" timestamp (not a sprint task — user question then
   request: `updated_at` is bumped by the `listings_set_updated_at` trigger on *any* row change —

@@ -8,6 +8,7 @@ import { formatVnDateTime } from "@/lib/format-vn-datetime";
 import { supabase } from "@/lib/supabase/server";
 import type { PostStatus } from "@/lib/supabase/database.types";
 import { POST_STATUS_BADGE } from "../post-status";
+import { DeletePostButton } from "./delete-post-button";
 
 const PAGE_SIZE = 20;
 const STATUS_OPTIONS: { value: PostStatus; label: string }[] = [
@@ -147,9 +148,12 @@ export default async function AdminPostsPage({
                     </td>
                     <td className="py-1.5 whitespace-nowrap">{formatVnDateTime(post.updated_at)}</td>
                     <td className="py-1.5 text-right">
-                      <Link href={`/admin/posts/${post.id}`} className="text-sm hover:underline">
-                        Sửa
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link href={`/admin/posts/${post.id}`} className="text-sm hover:underline">
+                          Sửa
+                        </Link>
+                        <DeletePostButton postId={post.id} />
+                      </div>
                     </td>
                   </tr>
                 );
