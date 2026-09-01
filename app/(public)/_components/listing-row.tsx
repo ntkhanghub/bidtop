@@ -74,11 +74,13 @@ export function ListingRow({
           ) : (
             <span className="text-xs text-muted-foreground sm:text-sm">#{rank}</span>
           )}
-          <Avatar className="size-6 sm:size-[50px]">
+          <Avatar className="size-6 rounded-lg sm:size-[50px]">
             {listing.logo_url && (
-              <AvatarImage src={listing.logo_url} alt="" className="object-contain" />
+              <AvatarImage src={listing.logo_url} alt="" className="rounded-lg object-contain" />
             )}
-            <AvatarFallback>{(listing.title ?? bareUrl).charAt(0).toUpperCase()}</AvatarFallback>
+            <AvatarFallback className="rounded-lg">
+              {(listing.title ?? bareUrl).charAt(0).toUpperCase()}
+            </AvatarFallback>
           </Avatar>
         </div>
         <div className="min-w-0 flex-1">

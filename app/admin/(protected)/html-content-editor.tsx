@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -42,7 +42,7 @@ export function HtmlContentEditor({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const [mode, setMode] = useState<"html" | "preview">("html");
+  const [mode, setMode] = useState<"html" | "preview">("preview");
   const [mediaOpen, setMediaOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -73,18 +73,6 @@ export function HtmlContentEditor({
           <div className="flex items-center gap-1 px-1">
             <button
               type="button"
-              onClick={() => setMode("html")}
-              className={cn(
-                "rounded-t-md px-3 py-1.5 text-sm",
-                mode === "html"
-                  ? "font-medium text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              HTML
-            </button>
-            <button
-              type="button"
               onClick={() => setMode("preview")}
               className={cn(
                 "rounded-t-md px-3 py-1.5 text-sm",
@@ -94,6 +82,18 @@ export function HtmlContentEditor({
               )}
             >
               Preview
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("html")}
+              className={cn(
+                "rounded-t-md px-3 py-1.5 text-sm",
+                mode === "html"
+                  ? "font-medium text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              HTML
             </button>
           </div>
         </div>
@@ -205,21 +205,52 @@ export function HtmlContentEditor({
             required
           />
         ) : (
-          <div className={cn("overflow-y-auto p-4", EDITOR_HEIGHT)}>
-            {value.trim() ? (
-              <div
-                className="prose prose-neutral dark:prose-invert max-w-none"
-                dangerouslySetInnerHTML={{ __html: value }}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">Chưa có nội dung.</p>
-            )}
-          </div>
+          <EditablePreview key="preview" id={id} value={value} onChange={onChange} />
         )}
       </div>
 
       <MediaLibraryDialog open={mediaOpen} onOpenChange={setMediaOpen} onSelect={handleMediaSelect} />
     </div>
+  );
+}
+
+// A real WYSIWYG surface (contentEditable), not a read-only render — typing
+// here edits the underlying HTML directly, same as WordPress's Visual tab.
+// Deliberately NOT driven by React's dangerouslySetInnerHTML on every render:
+// once mounted, the DOM itself is the source of truth (only written once, via
+// the effect below) and only ever read FROM via onInput. Re-applying `value`
+// reactively on every keystroke would reset the browser's cursor/selection on
+// every character typed — the classic contentEditable-in-React bug.
+function EditablePreview({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = value;
+    // Runs once, when this mounts (i.e. when switching into Preview mode) —
+    // not on every `value` change, by design. See the comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      id={id}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={(e) => onChange(e.currentTarget.innerHTML)}
+      className={cn(
+        "prose prose-neutral dark:prose-invert max-w-none overflow-y-auto p-4 outline-none",
+        EDITOR_HEIGHT,
+      )}
+    />
   );
 }
 

@@ -36,6 +36,43 @@ Definition of Done: just `TEST_BYPASS_EMAIL` removal + a final live demo review.
 
 ## Task log
 <!-- Newest first. One line: date · task ID · outcome · commit/PR if any -->
+- 2026-09-01 · Homepage listing logos changed from circular to rounded-square (not a sprint task —
+  user request) · `app/(public)/_components/listing-row.tsx`'s `Avatar`/`AvatarImage`/
+  `AvatarFallback` now take a `rounded-lg` override on top of the shared `Avatar` component's
+  default `rounded-full`, scoped to this one call site only — other `Avatar` usages (listing detail
+  page, activity feed, admin account menu) are untouched and stay circular. Verified live against
+  the running dev server: both a real logo (rank #1) and letter-fallback avatars (#2/#3, no
+  `logo_url`) render as rounded squares. Lint/typecheck/`npm test` (31/31) all pass.
+- 2026-08-31 · Content editor's Preview tab moved left of HTML (now the default), and Preview is
+  now a real WYSIWYG surface — typing directly in it edits the underlying HTML, same as
+  WordPress's Visual tab (not a sprint task — user request, direct follow-up to the WordPress-style
+  editor work) · **The real risk here**, called out explicitly rather than glossed over: making a
+  `dangerouslySetInnerHTML` div also `contentEditable` is a well-known React foot-gun — if the
+  div's rendered content stays reactively bound to the `value` prop, every keystroke's `onInput`
+  → `onChange` → re-render → re-applied `dangerouslySetInnerHTML` cycle destroys and recreates the
+  DOM text nodes the browser's cursor/selection was anchored to, so the cursor jumps to the start
+  after every single character typed. **Fix:** new `EditablePreview` in `html-content-editor.tsx`
+  never uses `dangerouslySetInnerHTML` reactively — a `useEffect(() => { ref.current.innerHTML =
+  value }, [])` with an **empty** dependency array writes the initial content exactly once, when
+  the div mounts (i.e. exactly when switching into Preview mode); after that, the DOM is the
+  source of truth and is only ever read *from* via `onInput`, never written to by React again,
+  until the div unmounts/remounts (switching away and back). Also: `mode` now defaults to
+  `"preview"` (previously `"html"`) to match "Visual is primary" like WordPress, since the ask to
+  reorder the tab plus "edit directly like WordPress" both point at Preview being the main surface
+  now, not a secondary read-only check. **Deliberately not touched, to keep this change small and
+  correct rather than sprawling:** the formatting toolbar and "Add Media" still only operate on the
+  raw HTML Textarea (auto-switching there first, same as before) — they do not yet drive
+  `document.execCommand`/Selection-based edits inside the new contentEditable surface. The user
+  asked specifically for direct text editing in Preview, not toolbar-in-Preview; flagging this as
+  the natural next ask rather than quietly expanding scope to guess at it. **Verified live**
+  against the real running dev server (this session's own, no longer blocked): typed
+  `"Hello world testing"` directly into the mounted `contentEditable` div via real keyboard events
+  and read `innerHTML` back — text landed in the correct order with **no scrambling and no
+  cursor-reset**, the specific failure mode this design avoids; switched to HTML and confirmed the
+  raw source read back exactly `Hello world testing`; appended `" - appended"` in HTML mode and
+  switched back to Preview, confirming the reverse sync also works
+  (`Hello world testing - appended`). Typecheck/lint/`npm test` (31/31)/`npm run build` all pass.
+  Not yet committed.
 - 2026-08-31 · Uploaded blog cover images now read as this site's own domain instead of
   `*.public.blob.vercel-storage.com` (not a sprint task — user request/debugging session, direct
   follow-up to the Blob upload work above) · **Two real production bugs found and fixed along the
