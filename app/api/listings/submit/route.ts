@@ -4,7 +4,7 @@ import { CATEGORY_SLUGS } from "@/lib/categorize";
 import { checkBannedPattern, resolveUrl } from "@/lib/content-validation";
 import { extractSiteMetadata } from "@/lib/extract-site-metadata";
 import { notifyNewSubmission } from "@/lib/email/notify";
-import { normalizeListingIdentity } from "@/lib/normalize-identity";
+import { isSocialProfileUrl, normalizeListingIdentity } from "@/lib/normalize-identity";
 import { buildGatewayOrderId } from "@/lib/payment/order-id";
 import { supabase } from "@/lib/supabase/server";
 
@@ -118,11 +118,13 @@ export async function POST(request: Request) {
       );
     }
     // Best-effort — only for brand-new listings (never re-extracted on a
-    // top-up) and never for @handle submissions (no public page to scrape,
-    // see PROGRESS.md Decisions).
-    const { title, logoUrl, description } = isHandle
-      ? { title: null, logoUrl: null, description: null }
-      : await extractSiteMetadata(displayUrl);
+    // top-up) and never for @handle submissions or a full URL on a known
+    // social platform (no real per-profile meta to scrape — login-walled or
+    // client-rendered, see PROGRESS.md Decisions).
+    const { title, logoUrl, description } =
+      isHandle || isSocialProfileUrl(displayUrl)
+        ? { title: null, logoUrl: null, description: null }
+        : await extractSiteMetadata(displayUrl);
 
     const { data: created, error } = await supabase
       .from("listings")

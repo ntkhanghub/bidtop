@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeListingIdentity } from "./normalize-identity";
+import { isSocialProfileUrl, normalizeListingIdentity } from "./normalize-identity";
 
 describe("normalizeListingIdentity", () => {
   it("normalizes a plain domain the same with or without www. and a query string", () => {
@@ -49,5 +49,48 @@ describe("normalizeListingIdentity", () => {
   it("rejects empty input", () => {
     expect(() => normalizeListingIdentity("")).toThrow();
     expect(() => normalizeListingIdentity("@")).toThrow();
+  });
+
+  it("keeps the profile path for a full URL on other major social platforms", () => {
+    expect(normalizeListingIdentity("https://www.tiktok.com/@nganphan9x.photo")).toBe(
+      "tiktok.com/@nganphan9x.photo",
+    );
+    expect(normalizeListingIdentity("https://www.facebook.com/zuck")).toBe("facebook.com/zuck");
+    expect(normalizeListingIdentity("https://www.instagram.com/nasa")).toBe("instagram.com/nasa");
+    expect(normalizeListingIdentity("https://www.linkedin.com/in/satyanadella")).toBe(
+      "linkedin.com/in/satyanadella",
+    );
+    expect(normalizeListingIdentity("https://www.pinterest.com/nasa")).toBe("pinterest.com/nasa");
+    expect(normalizeListingIdentity("https://www.threads.net/@nasa")).toBe("threads.net/@nasa");
+  });
+
+  it("distinguishes two different profiles on the same social platform", () => {
+    const a = normalizeListingIdentity("https://tiktok.com/@alice");
+    const b = normalizeListingIdentity("https://tiktok.com/@bob");
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("isSocialProfileUrl", () => {
+  it("recognizes known social platform hosts", () => {
+    for (const url of [
+      "https://x.com/elonmusk",
+      "https://www.facebook.com/zuck",
+      "https://www.instagram.com/nasa",
+      "https://www.pinterest.com/nasa",
+      "https://www.tiktok.com/@nganphan9x.photo",
+      "https://www.linkedin.com/in/satyanadella",
+      "https://www.threads.net/@nasa",
+    ]) {
+      expect(isSocialProfileUrl(url)).toBe(true);
+    }
+  });
+
+  it("returns false for a plain website", () => {
+    expect(isSocialProfileUrl("https://stripe.com")).toBe(false);
+  });
+
+  it("returns false for an unparseable URL", () => {
+    expect(isSocialProfileUrl("not a url")).toBe(false);
   });
 });

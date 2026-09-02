@@ -16,9 +16,33 @@
 
 const PATH_SIGNIFICANT_HOSTS = new Set(["apps.apple.com", "play.google.com", "github.com"]);
 
+// Major social platforms — a profile/page URL here is path-significant (like
+// PATH_SIGNIFICANT_HOSTS above) AND has no meaningful scrapable page meta
+// (login-walled or client-rendered), so app/api/listings/submit/route.ts also
+// uses this set to skip extractSiteMetadata for a full URL on any of these
+// hosts, the same way it already skips it for a bare "@handle".
+export const SOCIAL_PROFILE_HOSTS = new Set([
+  "x.com",
+  "facebook.com",
+  "instagram.com",
+  "pinterest.com",
+  "tiktok.com",
+  "linkedin.com",
+  "threads.net",
+  "threads.com",
+]);
+
 const HOST_ALIASES: Record<string, string> = {
   "twitter.com": "x.com",
 };
+
+function normalizeHost(hostname: string): string {
+  let host = hostname.toLowerCase();
+  if (host.startsWith("www.")) {
+    host = host.slice(4);
+  }
+  return HOST_ALIASES[host] ?? host;
+}
 
 export function normalizeListingIdentity(input: string): string {
   const trimmed = input.trim();
@@ -43,13 +67,9 @@ export function normalizeListingIdentity(input: string): string {
     throw new Error(`Invalid URL: ${input}`);
   }
 
-  let host = url.hostname.toLowerCase();
-  if (host.startsWith("www.")) {
-    host = host.slice(4);
-  }
-  host = HOST_ALIASES[host] ?? host;
+  const host = normalizeHost(url.hostname);
 
-  if (!PATH_SIGNIFICANT_HOSTS.has(host) && host !== "x.com") {
+  if (!PATH_SIGNIFICANT_HOSTS.has(host) && !SOCIAL_PROFILE_HOSTS.has(host)) {
     return host;
   }
 
@@ -62,4 +82,14 @@ export function normalizeListingIdentity(input: string): string {
       : url.pathname.replace(/\/+$/, "");
 
   return `${host}${identityPart}`.toLowerCase();
+}
+
+// Used by app/api/listings/submit/route.ts to decide whether a full profile
+// URL (not just a bare "@handle") should skip extractSiteMetadata.
+export function isSocialProfileUrl(url: string): boolean {
+  try {
+    return SOCIAL_PROFILE_HOSTS.has(normalizeHost(new URL(url).hostname));
+  } catch {
+    return false;
+  }
 }
