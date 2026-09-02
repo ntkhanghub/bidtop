@@ -38,7 +38,7 @@ export default async function AdminBidsPage({
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
   function pageHref(targetPage: number) {
-    return targetPage > 1 ? `/admin/bids?page=${targetPage}` : "/admin/bids";
+    return targetPage > 1 ? `/panel-secure/bids?page=${targetPage}` : "/panel-secure/bids";
   }
 
   return (
@@ -71,7 +71,7 @@ export default async function AdminBidsPage({
                     </td>
                     <td className="max-w-48 truncate py-1.5">
                       {listing ? (
-                        <Link href={`/admin/listings/${listing.id}`} className="hover:underline">
+                        <Link href={`/panel-secure/listings/${listing.id}`} className="hover:underline">
                           {listing.title ?? listing.display_url}
                         </Link>
                       ) : (

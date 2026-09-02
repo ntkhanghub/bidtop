@@ -11,7 +11,7 @@ export function AccountMenu({ email, role }: { email: string; role: AdminRole })
 
   async function handleLogout() {
     await fetch("/api/admin/logout", { method: "POST" });
-    router.push("/admin/login");
+    router.push("/panel-secure/login");
     router.refresh();
   }
 

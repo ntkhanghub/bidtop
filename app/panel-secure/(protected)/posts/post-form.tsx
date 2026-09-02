@@ -131,7 +131,7 @@ export function PostForm({
       return;
     }
     toast.success("Đã lưu bài viết");
-    router.push("/admin/posts");
+    router.push("/panel-secure/posts");
     router.refresh();
   }
 
@@ -250,7 +250,7 @@ export function PostForm({
               {submitting ? "Đang lưu..." : "Lưu bài viết"}
             </Button>
             <Button asChild type="button" variant="outline">
-              <Link href="/admin/posts">Huỷ</Link>
+              <Link href="/panel-secure/posts">Huỷ</Link>
             </Button>
           </div>
         </div>

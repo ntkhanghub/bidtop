@@ -32,7 +32,7 @@ export function LoginForm() {
         setSubmitting(false);
         return;
       }
-      router.push("/admin");
+      router.push("/panel-secure");
       router.refresh();
     } catch {
       setError("Đăng nhập thất bại, thử lại.");

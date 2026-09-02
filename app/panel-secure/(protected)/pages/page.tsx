@@ -20,7 +20,7 @@ export default async function AdminPagesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">Trang tĩnh</h1>
         <Button asChild size="sm">
-          <Link href="/admin/pages/new">Tạo trang</Link>
+          <Link href="/panel-secure/pages/new">Tạo trang</Link>
         </Button>
       </div>
 
@@ -51,7 +51,7 @@ export default async function AdminPagesPage() {
                     <td className="py-1.5 whitespace-nowrap">{formatVnDateTime(page.updated_at)}</td>
                     <td className="py-1.5 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link href={`/admin/pages/${page.id}`} className="text-sm hover:underline">
+                        <Link href={`/panel-secure/pages/${page.id}`} className="text-sm hover:underline">
                           Sửa
                         </Link>
                         <DeletePageButton pageId={page.id} />

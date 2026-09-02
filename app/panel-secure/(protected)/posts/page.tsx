@@ -69,7 +69,7 @@ export default async function AdminPostsPage({
     if (status) sp.set("status", status);
     if (targetPage > 1) sp.set("page", String(targetPage));
     const qs = sp.toString();
-    return qs ? `/admin/posts?${qs}` : "/admin/posts";
+    return qs ? `/panel-secure/posts?${qs}` : "/panel-secure/posts";
   }
 
   return (
@@ -77,7 +77,7 @@ export default async function AdminPostsPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">Bài viết</h1>
         <Button asChild size="sm">
-          <Link href="/admin/posts/new">Tạo bài viết</Link>
+          <Link href="/panel-secure/posts/new">Tạo bài viết</Link>
         </Button>
       </div>
 
@@ -149,7 +149,7 @@ export default async function AdminPostsPage({
                     <td className="py-1.5 whitespace-nowrap">{formatVnDateTime(post.updated_at)}</td>
                     <td className="py-1.5 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link href={`/admin/posts/${post.id}`} className="text-sm hover:underline">
+                        <Link href={`/panel-secure/posts/${post.id}`} className="text-sm hover:underline">
                           Sửa
                         </Link>
                         <DeletePostButton postId={post.id} />

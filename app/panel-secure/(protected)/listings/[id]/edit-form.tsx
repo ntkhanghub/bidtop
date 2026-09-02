@@ -62,7 +62,7 @@ export function EditForm({ listing, categories }: { listing: Listing; categories
       return;
     }
     toast.success("Đã lưu listing");
-    router.push("/admin/listings");
+    router.push("/panel-secure/listings");
   }
 
   // Mirrors the existing guarded status-transition endpoints (approve/reject/
@@ -256,7 +256,7 @@ export function EditForm({ listing, categories }: { listing: Listing; categories
             {submitting ? "Đang lưu..." : "Lưu thay đổi"}
           </Button>
           <Button asChild type="button" variant="outline">
-            <Link href="/admin/listings">Huỷ</Link>
+            <Link href="/panel-secure/listings">Huỷ</Link>
           </Button>
         </div>
       </form>

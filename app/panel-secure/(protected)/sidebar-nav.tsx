@@ -10,16 +10,16 @@ export function SidebarNav({ showSettings }: { showSettings: boolean }) {
   const pathname = usePathname();
 
   const items = [
-    { href: "/admin", label: "Hàng chờ duyệt", icon: <ClipboardCheck className="size-[18px]" /> },
-    { href: "/admin/listings", label: "Quản lý link", icon: <List className="size-[18px]" /> },
-    { href: "/admin/bids", label: "Lịch sử bid", icon: <History className="size-[18px]" /> },
-    { href: "/admin/posts", label: "Bài viết", icon: <Newspaper className="size-[18px]" /> },
-    { href: "/admin/post-categories", label: "Danh mục blog", icon: <Tags className="size-[18px]" /> },
-    { href: "/admin/pages", label: "Trang tĩnh", icon: <FileText className="size-[18px]" /> },
+    { href: "/panel-secure", label: "Hàng chờ duyệt", icon: <ClipboardCheck className="size-[18px]" /> },
+    { href: "/panel-secure/listings", label: "Quản lý link", icon: <List className="size-[18px]" /> },
+    { href: "/panel-secure/bids", label: "Lịch sử bid", icon: <History className="size-[18px]" /> },
+    { href: "/panel-secure/posts", label: "Bài viết", icon: <Newspaper className="size-[18px]" /> },
+    { href: "/panel-secure/post-categories", label: "Danh mục blog", icon: <Tags className="size-[18px]" /> },
+    { href: "/panel-secure/pages", label: "Trang tĩnh", icon: <FileText className="size-[18px]" /> },
     ...(showSettings
       ? [
           {
-            href: "/admin/settings",
+            href: "/panel-secure/settings",
             label: "Cài đặt",
             icon: <Settings className="size-[18px]" />,
             badge: "Super admin",

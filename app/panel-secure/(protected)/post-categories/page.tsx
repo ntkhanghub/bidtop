@@ -17,7 +17,7 @@ export default async function AdminPostCategoriesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">Danh mục blog</h1>
         <Button asChild size="sm">
-          <Link href="/admin/post-categories/new">Thêm danh mục</Link>
+          <Link href="/panel-secure/post-categories/new">Thêm danh mục</Link>
         </Button>
       </div>
 
@@ -45,7 +45,7 @@ export default async function AdminPostCategoriesPage() {
                   <td className="py-1.5 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Link
-                        href={`/admin/post-categories/${category.id}`}
+                        href={`/panel-secure/post-categories/${category.id}`}
                         className="text-sm hover:underline"
                       >
                         Sửa

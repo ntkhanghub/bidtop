@@ -83,7 +83,7 @@ export function PageForm({ page }: { page?: Page }) {
       return;
     }
     toast.success("Đã lưu trang");
-    router.push("/admin/pages");
+    router.push("/panel-secure/pages");
     router.refresh();
   }
 
@@ -181,7 +181,7 @@ export function PageForm({ page }: { page?: Page }) {
               {submitting ? "Đang lưu..." : "Lưu trang"}
             </Button>
             <Button asChild type="button" variant="outline">
-              <Link href="/admin/pages">Huỷ</Link>
+              <Link href="/panel-secure/pages">Huỷ</Link>
             </Button>
           </div>
         </div>

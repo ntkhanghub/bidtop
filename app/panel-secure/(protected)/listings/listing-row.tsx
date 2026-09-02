@@ -117,7 +117,7 @@ export function ListingRow({ listing, categories }: { listing: Listing; categori
       <td className="py-2.5">
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/admin/listings/${listing.id}`}>Chi tiết</Link>
+            <Link href={`/panel-secure/listings/${listing.id}`}>Chi tiết</Link>
           </Button>
 
           {listing.status === "approved" && (

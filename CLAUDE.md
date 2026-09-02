@@ -111,14 +111,18 @@ app/
                                # _components/copy-link-button.tsx is its one client subcomponent.
     rules/, about/            # S5 — static pages (F3); about/ has a real-copy TODO placeholder
     _components/               # listing-row, leaderboard, activity-feed, online-counter (client)
-  admin/(protected)/          # S4 — login-gated: pending queue (/admin), listings management
-                               # (/admin/listings — search/filter/unpublish/republish;
-                               # listings/[id] — full metadata edit form + status actions
-                               # (approve/reject/unpublish/republish via the same guarded
+  panel-secure/(protected)/    # S4 — login-gated: pending queue (/panel-secure), listings
+                               # management (/panel-secure/listings — search/filter/unpublish/
+                               # republish; listings/[id] — full metadata edit form + status
+                               # actions (approve/reject/unpublish/republish via the same guarded
                                # endpoints) + per-listing bid history + click stats (total + per-
-                               # day), added 2026-08-29), bids (/admin/bids — global bid history,
-                               # newest first, added 2026-08-29), settings (super_admin)
-  admin/login/                # S4 — public login page
+                               # day), added 2026-08-29), bids (/panel-secure/bids — global bid
+                               # history, newest first, added 2026-08-29), settings (super_admin).
+                               # Renamed from app/admin/ (2026-09-02, user's explicit call — an
+                               # unguessable path is a cheap extra layer on top of the real auth
+                               # check, not a substitute for it). api/admin/ (below) is unchanged —
+                               # only the browsable page path moved.
+  panel-secure/login/          # S4 — public login page (renamed from app/admin/login/)
   api/admin/                  # S4 — login/logout, listings/[id]/{approve,reject,unpublish,
                                # republish} (guarded single-purpose status transitions) +
                                # listings/[id] (POST — general metadata edit: title/logo/

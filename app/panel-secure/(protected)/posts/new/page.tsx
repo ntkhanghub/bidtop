@@ -17,7 +17,7 @@ export default async function NewPostPage() {
       {!categories || categories.length === 0 ? (
         <p className="mt-4 text-muted-foreground">
           Cần tạo ít nhất một{" "}
-          <Link href="/admin/post-categories/new" className="text-accent hover:underline">
+          <Link href="/panel-secure/post-categories/new" className="text-accent hover:underline">
             danh mục blog
           </Link>{" "}
           trước khi tạo bài viết — mọi bài viết đều phải thuộc một danh mục.

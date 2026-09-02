@@ -120,7 +120,7 @@ export default async function AdminListingsPage({
     if (dir !== "desc") sp.set("dir", dir);
     if (targetPage > 1) sp.set("page", String(targetPage));
     const qs = sp.toString();
-    return qs ? `/admin/listings?${qs}` : "/admin/listings";
+    return qs ? `/panel-secure/listings?${qs}` : "/panel-secure/listings";
   }
 
   // Clicking a column header sorts by it (desc by default — newest/highest
@@ -132,7 +132,7 @@ export default async function AdminListingsPage({
     if (key !== "created_at") sp.set("sort", key);
     if (nextDir !== "desc") sp.set("dir", nextDir);
     const qs = sp.toString();
-    return qs ? `/admin/listings?${qs}` : "/admin/listings";
+    return qs ? `/panel-secure/listings?${qs}` : "/panel-secure/listings";
   }
 
   function SortIcon({ column }: { column: SortKey }) {

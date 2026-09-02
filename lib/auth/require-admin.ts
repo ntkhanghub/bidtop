@@ -9,12 +9,12 @@ export async function getAdminSession() {
   return verifySessionToken(store.get(SESSION_COOKIE)?.value);
 }
 
-// For Server Component pages under app/admin/(protected) — redirects rather
-// than rendering, since there's no logged-out state to show inline there.
+// For Server Component pages under app/panel-secure/(protected) — redirects
+// rather than rendering, since there's no logged-out state to show inline there.
 export async function requireAdminPage(minRole: AdminRole = "admin") {
   const session = await getAdminSession();
-  if (!session) redirect("/admin/login");
-  if (minRole === "super_admin" && session.role !== "super_admin") redirect("/admin");
+  if (!session) redirect("/panel-secure/login");
+  if (minRole === "super_admin" && session.role !== "super_admin") redirect("/panel-secure");
   return session;
 }
 

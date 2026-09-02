@@ -42,7 +42,7 @@ export function CategoryForm({ category }: { category?: Category }) {
       return;
     }
     toast.success("Đã lưu danh mục");
-    router.push("/admin/post-categories");
+    router.push("/panel-secure/post-categories");
     router.refresh();
   }
 
@@ -86,7 +86,7 @@ export function CategoryForm({ category }: { category?: Category }) {
           {submitting ? "Đang lưu..." : "Lưu"}
         </Button>
         <Button asChild type="button" variant="outline">
-          <Link href="/admin/post-categories">Huỷ</Link>
+          <Link href="/panel-secure/post-categories">Huỷ</Link>
         </Button>
       </div>
     </form>
